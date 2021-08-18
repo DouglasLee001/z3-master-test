@@ -35,6 +35,9 @@ namespace smt {
        
        When this class is used to implement unit propagation, a literal l1 in m_watch_list[l2] 
        represents the binary clause (or l1 (not l2))
+       watch指定文字的文字和子句列表
+       当该类被用来实现单元传播时，文字l1在m_watch_list[l2]表示二元子句(or l1 (not l2))
+       cls在watch_list[l]中表示cls是l的非所在的子句（其原本非false，现在变为false）
     */
     class watch_list {
         char *    m_data;

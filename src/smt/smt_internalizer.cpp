@@ -222,6 +222,7 @@ namespace smt {
        \brief Internalize an expression asserted into the logical context using the given proof as a justification.
        
        \remark pr is 0 if proofs are disabled.
+       中间化一个被断言进逻辑context的表达式，运用给定的证明作为验证
     */
     void context::internalize_assertion(expr * n, proof * pr, unsigned generation) {
         TRACE("internalize_assertion", tout << mk_pp(n, m) << "\n";); 
@@ -1279,26 +1280,37 @@ namespace smt {
     /**
        \brief Select a watch literal from a set of literals which is
        different from the literal in position other_watch_lit.
+        从一系列的不同于在other_watch_lit位置的文字中选择一个watch文字，该方法被用在mk_clause和reinit_clauses中
 
        I use the following rules to select a watch literal.
-
+        用如下规则来选择一个watch文字
        1- select a literal l in idx >= starting_at such that get_assignment(l) = l_true,
        and for all l' in idx' >= starting_at . get_assignment(l') = l_true implies get_level(l) <= get_level(l')
-
+       
+        1.选择一个文字l在idx>=starting_at使得l的赋值为l_true，并且对于所有idx'>=starting_at，赋值为true意味着get_level(l)<=get_level(l')，（即l所在最小的level）
+       
        The purpose of this rule is to make the clause inactive for as long as possible. A clause
        is inactive when it contains a literal assigned to true.
-
+       
+        该规则的目的是让子句尽量长时间地保持不活跃，当一个子句包含一个赋值为true的文字，它是不活跃的
+       
        2- if there isn't a literal assigned to true, then select an unassigned literal l is in idx >= starting_at
-
+       
+        如果不存在一个文字赋值为true，则选择一个idx>=starting_at的未赋值文字
+       
        3- if there isn't a literal l in idx >= starting_at such that get_assignment(l) = l_true or
        get_assignment(l) = l_undef (that is, all literals different from other_watch_lit are assigned
        to false), then peek the literal l different starting at starting_at such that for all l' starting at starting_at
        get_level(l) >= get_level(l')
 
+        如果不存在一个idx>=starting_at的文字使得其赋值为true或者undef（即所有不同于other_watch_lit的文字都被赋值为false）
+        则选择从starting_at开始的不同的文字l，使得l的level比所有其他文字l'的level高，(如果没有规则3，BCP可能不完备，因为它可能会错过可能的传播?)
+       
        Without rule 3, boolean propagation is incomplete, that is, it may miss possible propagations.
        
        \remark The method select_lemma_watch_lit is used to select the
        watch literal for regular learned clauses.
+       select_lemma_watch_lit用来为常规学习子句来选择watch文字
     */
     int context::select_watch_lit(clause const * cls, int starting_at) const {
         SASSERT(cls->get_num_literals() >= 2);

@@ -26,17 +26,17 @@ namespace smt {
     private:
         b_justification         m_justification;
     public:
-        unsigned                m_scope_lvl:24;    //!< scope level of when the variable was assigned.
+        unsigned                m_scope_lvl:24;    //!< scope level of when the variable was assigned.该变量的决策层
         unsigned                m_mark:1;
         unsigned                m_assumption:1;
-        unsigned                m_phase_available:1;
-        unsigned                m_phase:1;
+        unsigned                m_phase_available:1;//phase是否可以获得
+        unsigned                m_phase:1;//phase取值
     private:
         unsigned                m_eq:1;
-        unsigned                m_true_first:1;   //!< If True, when case splitting try the true phase first. Otherwise, you default phase selection heuristic.
-        unsigned                m_enode:1;        //!< has enode associated with it.
-        unsigned                m_quantifier:1;   //!< true if bool var is attached to a quantifier
-        unsigned                m_iscope_lvl:23;  //!< scope level of when the variable was internalized.
+        unsigned                m_true_first:1;   //!< If True, when case splitting try the true phase first. Otherwise, you default phase selection heuristic.如果是true，在case_split时优先尝试true
+        unsigned                m_enode:1;        //!< has enode associated with it.有相关的enode
+        unsigned                m_quantifier:1;   //!< true if bool var is attached to a quantifier 如果该bool变量与量词相关
+        unsigned                m_iscope_lvl:23;  //!< scope level of when the variable was internalized. 该变量被internalize的决策层
         unsigned                m_atom:1;         //!< logical or of m_eq, m_enode, m_quantifier, and m_notify_theory != 0
         unsigned                m_notify_theory:8;
 

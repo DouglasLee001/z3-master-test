@@ -20,7 +20,7 @@ Revision History:
 #include "ast/ast_pp.h"
 
 namespace smt {
-
+    //获取所有引理的平均活跃度
     unsigned context::get_lemma_avg_activity() const {
         if (m_lemmas.empty())
             return 0;

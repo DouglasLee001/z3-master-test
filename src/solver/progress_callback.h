@@ -22,7 +22,7 @@ class progress_callback {
 public:
     virtual ~progress_callback() {}
     
-    // Called on every check for resource limit exceeded (much more frequent).
+    // Called on every check for resource limit exceeded (much more frequent).每次检测资源超出的检测都会被调用（更加频繁使用）
     virtual void fast_progress_sample() {}
 
     // Less frequent invoked.

@@ -288,6 +288,7 @@ namespace smt {
            \brief This method is called from the smt_context when an unsat core is generated.
            The theory may tell the solver to perform iterative deepening by invalidating
            this unsat core and increasing some resource constraints.
+           该方法是当一个unsat core被生成了，则从smt_context中调用。理论会告诉解算器执行迭代深化，通过使这个未满足的核心无效并增加一些资源约束
         */
         virtual bool should_research(expr_ref_vector & unsat_core) {
             return false;
@@ -326,6 +327,7 @@ namespace smt {
         /**
            \brief This method is invoked to give a theory a chance to perform
            theory propagation.
+           该方法被调用来让理论求解器执行理论传播
         */
         virtual void propagate() {
         }

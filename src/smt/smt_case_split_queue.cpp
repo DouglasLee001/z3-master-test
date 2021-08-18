@@ -117,13 +117,14 @@ namespace {
 
         void pop_scope(unsigned num_scopes) override {}
 
+        //将phase设置为l_undef，然后找一个随机的internalized的值next，如果next是undef，则直接返回，否则就从队列中选择一个最小的未赋值变量
         void next_case_split(bool_var & next, lbool & phase) override {
             phase = l_undef;
             
             if (m_context.get_random_value() < static_cast<int>(m_params.m_random_var_freq * random_gen::max_value())) {
-                next = m_context.get_random_value() % m_context.get_num_b_internalized(); 
+                next = m_context.get_random_value() % m_context.get_num_b_internalized(); //将next设定为选择任意一个internalized的值
                 TRACE("random_split", tout << "next: " << next << " get_assignment(next): " << m_context.get_assignment(next) << "\n";);
-                if (m_context.get_assignment(next) == l_undef)
+                if (m_context.get_assignment(next) == l_undef)//如果next 的赋值情况为undef，则直接返回
                     return;
             }
             

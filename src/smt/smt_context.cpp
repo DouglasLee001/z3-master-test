@@ -115,6 +115,7 @@ namespace smt {
 
     /**
        \brief retrieve flag for when cancelation is possible.
+       获得可以取消时的检索标志
     */
 
     bool context::get_cancel_flag() {
@@ -226,21 +227,21 @@ namespace smt {
         copy_plugins(*this, *new_ctx);
         return new_ctx;
     }
-
+    //初始化操作
     void context::init() {
         app * t       = m.mk_true();
-        mk_bool_var(t);
+        mk_bool_var(t);//首先构造一个为真的bool变量t
         SASSERT(get_bool_var(t) == true_bool_var);
         SASSERT(true_literal.var() == true_bool_var);
-        m_assignment[true_literal.index()]     = l_true;
+        m_assignment[true_literal.index()]     = l_true;//真假文字赋值为相应的值
         m_assignment[false_literal.index()]    = l_false;
-        if (m.proofs_enabled()) {
+        if (m.proofs_enabled()) {//如果使用证明
             proof * pr = m.mk_true_proof();
 
-            set_justification(true_bool_var, m_bdata[true_bool_var], b_justification(mk_justification(justification_proof_wrapper(*this, pr))));
+            set_justification(true_bool_var, m_bdata[true_bool_var], b_justification(mk_justification(justification_proof_wrapper(*this, pr))));//为真文字设置验证
         }
         else {
-            m_bdata[true_bool_var].set_axiom();
+            m_bdata[true_bool_var].set_axiom();//如果不使用
         }
         m_true_enode  = mk_enode(t, true, true, false);
         // internalizer is marking enodes as interpreted whenever the associated ast is a value and a constant.
@@ -273,20 +274,21 @@ namespace smt {
         d.set_justification(j);
     }
 
+    //将l对应的bool变量赋值为l的取值，改变m_assignment中的赋值，将l对应的变量数据的phase设置为相反取值，decision表示是否为一次决策操作，
     void context::assign_core(literal l, b_justification j, bool decision) {
-        m_assigned_literals.push_back(l);
-        m_assignment[l.index()]    = l_true;
-        m_assignment[(~l).index()] = l_false;
-        bool_var_data & d          = get_bdata(l.var());
+        m_assigned_literals.push_back(l);//赋值的文字入栈
+        m_assignment[l.index()]    = l_true;//将文字所在位置设为true
+        m_assignment[(~l).index()] = l_false;//文字的非的位置设为false
+        bool_var_data & d          = get_bdata(l.var());//d是l对应的bool变量数据
         set_justification(l.var(), d, j);
         d.m_scope_lvl              = m_scope_lvl;
         if (m_fparams.m_restart_adaptive && d.m_phase_available) {
-            m_agility             *= m_fparams.m_agility_factor;
+            m_agility             *= m_fparams.m_agility_factor;//略微减小agility
             if (!decision && d.m_phase == l.sign())
-                m_agility         += (1.0 - m_fparams.m_agility_factor);
+                m_agility         += (1.0 - m_fparams.m_agility_factor);//如果decision是false，表示不是一次decision操作，并且phase与l的赋值相同，就需要增大agility，也就是敏捷性，以备重启使用
         }
         d.m_phase_available        = true;
-        d.m_phase                  = !l.sign();
+        d.m_phase                  = !l.sign();//将l对应的bool变量的phase设置层l的相反符号
         TRACE("assign_core", tout << (decision?"decision: ":"propagating: ") << l << " ";
               display_literal_smt2(tout, l) << "\n";
               tout << "relevant: " << is_relevant_core(l) << " level: " << m_scope_lvl << " is atom " << d.is_atom() << "\n";
@@ -303,47 +305,47 @@ namespace smt {
 
         m_case_split_queue->assign_lit_eh(l);
     }
-
+    //进行bool约束传播
     bool context::bcp() {
         SASSERT(!inconsistent());
-        while (m_qhead < m_assigned_literals.size()) {
+        while (m_qhead < m_assigned_literals.size()) {//该操作会改变m_head
             if (get_cancel_flag()) {
                 return true;
             }
-            literal l      = m_assigned_literals[m_qhead];
+            literal l      = m_assigned_literals[m_qhead];//m_qhead指向还未处理的已赋值变量
             SASSERT(get_assignment(l) == l_true);
             m_qhead++;
             m_simp_counter--;
-            literal not_l  = ~l;
-            SASSERT(get_assignment(not_l) == l_false);
-            watch_list & w = m_watches[l.index()];
-            if (binary_clause_opt_enabled()) {
+            literal not_l  = ~l;//该文字的非
+            SASSERT(get_assignment(not_l) == l_false);//该文字的非应该为false，因为该文字是被assigned，必然为真
+            watch_list & w = m_watches[l.index()];//w是l watch的子句/文字 列表，对应的是l的非所在的子句（其原本非false，现在变为false），not_l 在该子句中
+            if (binary_clause_opt_enabled()) {//如果使用二元子句优化，进行二元子句传播
                 // binary clause propagation
                 b_justification js(l);
                 literal * it  = w.begin_literals();
                 literal * end = w.end_literals();
-                for(; it != end; ++it) {
+                for(; it != end; ++it) {//逐个遍历被l watch的二元子句中的文字l
                     literal l = *it;
                     switch (get_assignment(l)) {
-                    case l_false:
+                    case l_false://如果当前l是false，则报告冲突
                         m_stats.m_num_bin_propagations++;
                         set_conflict(js, ~l);
                         return false;
-                    case l_undef:
+                    case l_undef://如果l未定义，则直接赋值
                         m_stats.m_num_bin_propagations++;
                         assign_core(l, js);
                         break;
-                    case l_true:
+                    case l_true://如果l已经未true，则跳过
                         break;
                     }
                 }
             }
 
-            // non-binary clause propagation
+            // non-binary clause propagation 非二元子句传播
             watch_list::clause_iterator it  = w.begin_clause();
-            watch_list::clause_iterator it2 = it;
+            watch_list::clause_iterator it2 = it;//it2指向l watch的最后一个子句
             watch_list::clause_iterator end = w.end_clause();
-            for(; it != end; ++it) {
+            for(; it != end; ++it) {//用it遍历w中的每个被watch的子句
                 clause * cls = *it;
                 CTRACE("bcp_bug", cls->get_literal(0) != not_l && cls->get_literal(1) != not_l, display_clause_detail(tout, cls);
                        tout << "not_l: "; display_literal(tout, not_l); tout << " " << not_l << "\n";);
@@ -358,53 +360,54 @@ namespace smt {
                 literal first_lit     = cls->get_literal(0);
                 lbool   first_lit_val = get_assignment(first_lit);
 
-                if (first_lit_val == l_true) {
-                    *it2 = *it; // clause is already satisfied, keep it
+                if (first_lit_val == l_true) {//另一个watch是true
+                    *it2 = *it; // clause is already satisfied, keep it 如果该子句已经被满足了，则保留它，因为在该子句中只有first_lit这一个真文字
                     it2++;
                 }
-                else {
-                    literal * it3  = cls->begin() + 2;
+                else {//如果第一个文字不是true，表示它是undef或者false
+                    literal * it3  = cls->begin() + 2;//it3表示从子句cls的第三位开始的文字
                     literal * end3 = cls->end();
                     for(; it3 != end3; ++it3) {
-                        if (get_assignment(*it3) != l_false) {
+                        if (get_assignment(*it3) != l_false) {//遍历子句cls中的文字，如果对应的不是false
                             // swap literal *it3 with literal at position 0
-                            // the negation of literal *it3 will watch clause cls.
+                            // the negation of literal *it3 will watch clause cls.如果it3对应的的赋值不是false，也就找到了cls的watch子句，将it3和位置0的文字交换，用it3的非来watch该子句
                             m_watches[(~(*it3)).index()].insert_clause(cls);
                             cls->set_literal(1, *it3);
-                            *it3   = not_l;
+                            *it3   = not_l;//将it3文字和1号位置的文字交换？
                             goto found_watch;
                         }
                     }
-                    // did not find watch...
-                    if (first_lit_val == l_false) {
-                        // CONFLICT
-                        // copy remaining watches
+                    // did not find watch...如果没有找到watch文字，即不是false的文字，则存在2种情况，另一个watch已经为false，则冲突，另一个watch是undef则单元传播
+                    if (first_lit_val == l_false) {//如果第一个文字是false，则说明该子句中所有文字都是false，说明该子句是假的
+                        // CONFLICT 产生冲突，所有文字都是假的，该子句为冲突
+                        // copy remaining watches 将watch 列表中的逐个向前复制，覆盖掉这个it所指的子句
                         while (it < end) {
                             *it2 = *it;
                             it2++;
                             it++;
                         }
                         SASSERT(it2 <= end);
-                        w.set_end_clause(it2);
+                        w.set_end_clause(it2);//设置l watch的子句的最后一个为it2
                         SASSERT(is_empty_clause(cls));
-                        set_conflict(b_justification(cls));
+                        set_conflict(b_justification(cls));//该子句是冲突子句
                         return false;
                     }
                     else {
-                        // PROPAGATION
-                        SASSERT(first_lit_val == l_undef);
+                        // PROPAGATION 传播
+                        SASSERT(first_lit_val == l_undef);//0号位的文字要是未赋值的
                         SASSERT(get_assignment(first_lit) == l_undef);
-                        SASSERT(is_unit_clause(cls));
+                        SASSERT(is_unit_clause(cls));//验证cls是一个单元子句
                         *it2 = *it;
-                        it2++; // keep clause
-                        m_stats.m_num_propagations++;
-                        // It is safe to call assign_core instead of assign because first_lit is unassigned
+                        it2++; // keep clause 保留该子句，因为l依然watch该子句，因为cls中目前只有一个非false文字
+                        m_stats.m_num_propagations++;//传播数量加一
+                        // It is safe to call assign_core instead of assign because first_lit is unassigned 可以安全地调用assign_core而非assign因为第一个未赋值
                         assign_core(first_lit, b_justification(cls));
-                        if (m_fparams.m_relevancy_lemma && cls->is_lemma()) {
+                        if (m_fparams.m_relevancy_lemma && cls->is_lemma()) {//如果cls是lemma并且参数中使用了相关性lemma
                             expr * e = bool_var2expr(first_lit.var());
                             // IMPORTANT: this kind of propagation asserts negative literals of the form (= A1 A2) where
                             // A1 and A2 are array terms. So, it may be interesting to disable it for array eqs.
                             //if (!(m.is_eq(e) && m.get_sort(to_app(e)->get_arg(0))->get_family_id() == m.get_family_id("array")))
+                            //这种传播断言形式（= A1 A2）的负文字，其中A1和A2是数组项。所以对数组等式禁用它可能很有趣
                             mark_as_relevant(e);
                         }
                     }
@@ -418,7 +421,7 @@ namespace smt {
     }
 
     /**
-       \brief Push a new equality for theory th, into the theory equality propagation queue.
+       \brief Push a new equality for theory th, into the theory equality propagation queue. 为理论th，将一个新的等式添加到等式传播队列中
     */
     void context::push_new_th_eq(theory_id th, theory_var lhs, theory_var rhs) {
         SASSERT(lhs != rhs);
@@ -430,7 +433,7 @@ namespace smt {
     }
 
     /**
-       \brief Push a new disequality for theory th, into the theory disequality propagation queue.
+       \brief Push a new disequality for theory th, into the theory disequality propagation queue. 为理论th，将一个新的不等式添加到不等式传播队列中
     */
     void context::push_new_th_diseq(theory_id th, theory_var lhs, theory_var rhs) {
         SASSERT(lhs != rhs);
@@ -444,7 +447,7 @@ namespace smt {
               tout << "#" << t->get_enode(lhs)->get_owner_id() << " != "
               << "#" << t->get_enode(rhs)->get_owner_id() << "\n";);
 
-        m_th_diseq_propagation_queue.push_back(new_th_eq(th, lhs, rhs));
+        m_th_diseq_propagation_queue.push_back(new_th_eq(th, lhs, rhs));//不等式传播队列中添加一个不等式，是以等式的形式存储
     }
 
     class add_eq_trail : public trail<context> {
@@ -464,7 +467,7 @@ namespace smt {
     };
 
     /**
-       \brief Add the equality n1 = n2 with justification js into the logical context.
+       \brief Add the equality n1 = n2 with justification js into the logical context.添加带有证明js的等式n1=n2到逻辑context中
     */
     void context::add_eq(enode * n1, enode * n2, eq_justification js) {
         unsigned old_trail_size = m_trail_stack.size();
@@ -580,6 +583,7 @@ namespace smt {
     /**
        \brief When merging to equivalence classes, the parents of the smallest one (that are congruence roots),
        must be removed from the congruence table since their hash code will change.
+       当合并进等价类时，最小的那个(也就是全等的根)的父亲节点要被从全等表格中移除，因为它的hash编码会改变
     */
     void context::remove_parents_from_cg_table(enode * r1) {
         // Remove parents from the congruence table
@@ -621,6 +625,9 @@ namespace smt {
        The n1, n2, js arguments are used to implement dynamic ackermanization.
        js is a justification for n1 and n2 being equal, and the equality n1 = n2 is
        the one that implied r1 = r2.
+       将因为remove_parents_from_cg_table函数而被从cg_table中移除的r1的父亲节点重新插入，一些此类父亲节点会和其他的enode变得全等，并且一些新等式会被传播，此外该方法也被用来做等式传播
+       如果r1的父亲节点还是全等根，则会被复制为r2的父亲节点
+       n1, n2, js是用来实现动态ackermanization的参数，js是一个n1和n2相等的证明，并且等式n1=n2是r1=r2推出的
     */
     void context::reinsert_parents_into_cg_table(enode * r1, enode * r2, enode * n1, enode * n2, eq_justification js) {
         enode_vector & r2_parents  = r2->m_parents;
@@ -688,6 +695,7 @@ namespace smt {
        and, there is an k such that N_k = n->get_root()
 
        This method will invert this branch.
+       一个由如下 从n开始到n->get_root结束的序列 表示的传递证明，通过N_i->m_trans.m_target逐层向上传递直到root，该方法会反转这个分支，相当于链表反转
     */
     void context::invert_trans(enode * n) {
         enode * curr                      = n->m_trans.m_target;
@@ -748,6 +756,14 @@ namespace smt {
        the logical context will send the natural sequence of equalities to the theories:
 
        n1 = n2 = n3 = n4 = n5 = n6
+       假设r是n的根，并且r包含了对于理论th_id的理论变量，该方法会返回一个在证明分支(n->...->r)上更靠近n的理论变量
+       该方法被用来提升由逻辑context产生的冲突子句的质量
+       考虑如下例子：
+       由一系列等式序列n1=n2=...n6，假设在每次合并之后n1是等价类的根，所以证明序列会有如下形状：n1 <- n2 <- n3 <- n4 <- n5 <- n6
+       假设所有的节点都连接着理论变量，如果get_closet没有被使用，则下面的等式序列会被交给理论：n1 = n2, n1 = n3, n1 = n4, n1 = n5, n1 = n6，该序列不好，并且理论可能会产生坏的证明。
+       例如假设存在如下数值约束：n5 < n6，对于算术理论模块，最好的证明是n1 = n5, n1 = n6 and n5 < n6
+       该证明包含了不必要的句子来证明n5=n6，也就是为了证明n5 = n6，用了n1 = n5 and n1 = n6
+       如果是用来get_closest_var方法，则逻辑context会交给理论如下自然的等式序列n1 = n2 = n3 = n4 = n5 = n6
     */
     theory_var context::get_closest_var(enode * n, theory_id th_id) {
         if (th_id == null_theory_id)
@@ -766,6 +782,8 @@ namespace smt {
        New th_var equalities are propagated to the theories.
 
        \remark In most cases, an enode is attached to at most one theory var.
+       将n1和n2的根节点的理论变量合并，结果存放在n2的根节点中，新的理论变量等式会传播给理论
+       在大多数情况下，一个enode只会和最多一个理论变量联系
     */
     void context::merge_theory_vars(enode * n2, enode * n1, eq_justification js) {
         enode * r2 = n2->get_root();
@@ -855,14 +873,15 @@ namespace smt {
 
     /**
        \brief Propagate the boolean assignment when two equivalence classes are merged.
+       当2个等价类被合并的时候，传播布尔赋值
     */
     void context::propagate_bool_enode_assignment(enode * r1, enode * r2, enode * n1, enode * n2) {
         SASSERT(n1->is_bool());
         SASSERT(n2->is_bool());
         SASSERT(r1->is_bool());
         SASSERT(r2->is_bool());
-        if (r2 == m_false_enode || r2 == m_true_enode) {
-            bool sign = r2 == m_false_enode;
+        if (r2 == m_false_enode || r2 == m_true_enode) {//如果r2是个false或者true的enode
+            bool sign = r2 == m_false_enode;//如果r2为false_enode则sign为true
             enode * curr = r1;
             do {
                 SASSERT(curr != m_false_enode);
@@ -872,15 +891,15 @@ namespace smt {
                     assign(l, mk_justification(eq_root_propagation_justification(curr)));
                 curr = curr->m_next;
             }
-            while (curr != r1);
+            while (curr != r1);//逐个从r1开始寻找下一个
         }
-        else {
+        else {//如果r2不是true或者false
             bool_var v1 = enode2bool_var(n1);
             bool_var v2 = enode2bool_var(n2);
-            lbool val1  = get_assignment(v1);
+            lbool val1  = get_assignment(v1);//var1和var2表示年n1对应的变量的赋值
             lbool val2  = get_assignment(v2);
-            if (val1 != val2) {
-                if (val2 == l_undef)
+            if (val1 != val2) {//如果n1和n2对应的赋值不同就要进行传播
+                if (val2 == l_undef)//如果val2未定义就以n2未目标传播，将n1对应的赋值传给n2
                     propagate_bool_enode_assignment_core(n1, n2);
                 else
                     propagate_bool_enode_assignment_core(n2, n1);
@@ -892,6 +911,7 @@ namespace smt {
        \brief source and target are boolean enodes, they were proved to be equal,
        and the boolean variable associated with source is assigned. Then,
        copy the assignment to the boolean variables associated with target.
+       源和目标是boolean的enode，他们被证实是相同的，并且和源相关的布尔变量是被赋值的，则将赋值复制给目标相关的布尔变量
     */
     void context::propagate_bool_enode_assignment_core(enode * source, enode * target) {
         SASSERT(source->is_bool());
@@ -1014,16 +1034,18 @@ namespace smt {
        get_theory(t2)->get_enode(v2)->get_root() != r2
 
        That is, v2 is not equivalent to r2 anymore.
+       为undo_add_eq设计的附加方法，它存储了给定root enode的理论变量
+       该方法删除了r2的任意理论变量v2（对于理论t2），当t2的enode的根不等于r2时，也就是v2不在等于r2
     */
     void context::restore_theory_vars(enode * r2, enode * r1) {
         SASSERT(r2->get_root() == r2);
         theory_var_list * new_l2  = nullptr;
-        theory_var_list * l2      = r2->get_th_var_list();
+        theory_var_list * l2      = r2->get_th_var_list();//r2是根，通过r2可以得到理论变量列表
         while (l2) {
-            theory_var v2 = l2->get_var();
+            theory_var v2 = l2->get_var();//通过l2获取一个理论变量v2
             theory_id t2  = l2->get_id();
 
-            if (get_theory(t2)->get_enode(v2)->get_root() != r2) {
+            if (get_theory(t2)->get_enode(v2)->get_root() != r2) {//如果t2中的v2的根不是r2
                 SASSERT(get_theory(t2)->get_enode(v2)->get_root() == r1);
                 l2 = l2->get_next();
             }
@@ -1052,6 +1074,7 @@ namespace smt {
     /**
        \brief This method is invoked when a new disequality is asserted.
        The disequality is propagated to the theories.
+       该方法在一个新的不等式被断言的时候调用，不等式会被传播到理论
     */
     bool context::add_diseq(enode * n1, enode * n2) {
         enode * r1 = n1->get_root();
@@ -1113,6 +1136,7 @@ namespace smt {
     /**
        \brief Return true if n1 and n2 are known to be disequal in the logical
        context.
+       如果n1和n2已知在逻辑context中不等
     */
     bool context::is_diseq(enode * n1, enode * n2) const {
         SASSERT(m.get_sort(n1->get_owner()) == m.get_sort(n2->get_owner()));
@@ -1147,6 +1171,7 @@ namespace smt {
 
     /**
        \brief Slow version of is_diseq
+       is_diseq的慢速版本
     */
     bool context::is_diseq_slow(enode * n1, enode * n2) const {
         if (n1->get_num_parents() > n2->get_num_parents())
@@ -1401,6 +1426,7 @@ namespace smt {
        associated with v.  Let n be the enode associated with v. Then,
        this method merges n = true_term (n = false_term) if v was
        assigned to true (false).
+       传播赋值给v的真值到与v相关的enode（应该是等价类的传播），设n是与v相关的enode，则如果v被赋值为true，该方法将合并n=true_term
     */
     void context::propagate_bool_var_enode(bool_var v) {
         SASSERT(get_assignment(v) != l_undef);
@@ -1422,6 +1448,7 @@ namespace smt {
         // Move truth value to other elements of the equivalence class if:
         //   1) n is the root of the equivalence class
         //   2) n is not the root, but the variable associated with the root is unassigned.
+        //将真值转移到等价类的其他元素中，如果(1)n是等价类的根，(2)n不是等价类的根但与根关联的变量未被赋值
         if (n == r ||
             !is_relevant(r) || // <<<< added to fix propagation bug.
             get_assignment(enode2bool_var(r)) != val) {
@@ -1439,6 +1466,7 @@ namespace smt {
     /**
        \brief Traverse the disequalities of r's equivalence class, and
        propagate them to the theory.
+       遍历r的等价类的不等式，并将他们传播给理论
     */
     void context::push_new_th_diseqs(enode * r, theory_var v, theory * th) {
         if (!th->use_diseqs()) {
@@ -1602,25 +1630,26 @@ namespace smt {
     /**
        \brief Propagate relevancy using the queue of new assigned literals
        located at [qhead, m_assigned_literals.size()).
+        用位于[qhead, m_assigned_literals.size())的新赋值的文字队列，来传播相关性
     */
     void context::propagate_relevancy(unsigned qhead) {
         if (!relevancy())
             return;
-        unsigned sz = m_assigned_literals.size();
-        while (qhead < sz) {
+        unsigned sz = m_assigned_literals.size();//已赋值的文字的数目
+        while (qhead < sz) {//遍历[qhead, m_assigned_literals.size())，从旧的m_head开始遍历所有已经赋值的文字
             literal l      = m_assigned_literals[qhead];
-            SASSERT(get_assignment(l) == l_true);
+            SASSERT(get_assignment(l) == l_true);//赋值的文字一定为真
             qhead++;
-            bool_var var   = l.var();
-            expr * n       = m_bool_var2expr[var];
-            m_relevancy_propagator->assign_eh(n, !l.sign());
+            bool_var var   = l.var();//找到刚赋值的文字对应的变量
+            expr * n       = m_bool_var2expr[var];//找到该变量对应的表达式n
+            m_relevancy_propagator->assign_eh(n, !l.sign());//进行相关性传播，通过assign_eh方法通知相关传播器新的赋值
         }
-        m_relevancy_propagator->propagate();
+        m_relevancy_propagator->propagate();//在一系列的assign_eh的通知之后开始使用相关传播器进行传播相关性，该传播针对不同的理论不同
     }
-
+    //理论传播，对每个理论都进行传播，如果出现了不一致，则返回false，如果所有的理论传播都一致，则返回true
     bool context::propagate_theories() {
         for (theory * t : m_theory_set) {
-            t->propagate();
+            t->propagate();//理论传播
             if (inconsistent())
                 return false;
         }
@@ -1631,20 +1660,20 @@ namespace smt {
 #endif
         return true;
     }
-
+    //将等式传播序列中的所有等式都添加到理论中，进行等式传播
     void context::propagate_th_eqs() {
-        for (unsigned i = 0; i < m_th_eq_propagation_queue.size() && !inconsistent(); i++) {
-            new_th_eq curr = m_th_eq_propagation_queue[i];
-            theory * th = get_theory(curr.m_th_id);
+        for (unsigned i = 0; i < m_th_eq_propagation_queue.size() && !inconsistent(); i++) {//遍历等式传播队列
+            new_th_eq curr = m_th_eq_propagation_queue[i];//选取等式传播队列中的第i个等式
+            theory * th = get_theory(curr.m_th_id);//找到该等式对应的理论
             SASSERT(th);
-            th->new_eq_eh(curr.m_lhs, curr.m_rhs);
+            th->new_eq_eh(curr.m_lhs, curr.m_rhs);//向该理论中添加一个等式
             DEBUG_CODE(
                 push_trail(push_back_trail<context, new_th_eq, false>(m_propagated_th_eqs));
                 m_propagated_th_eqs.push_back(curr););
         }
         m_th_eq_propagation_queue.reset();
     }
-
+    //将不等式传播队列中的所有不等式都添加到理论中，进行不等式传播
     void context::propagate_th_diseqs() {
         for (unsigned i = 0; i < m_th_diseq_propagation_queue.size() && !inconsistent(); i++) {
             new_th_eq curr = m_th_diseq_propagation_queue[i];
@@ -1657,7 +1686,7 @@ namespace smt {
         }
         m_th_diseq_propagation_queue.reset();
     }
-
+    //如果可以理论传播则返回true，逐个检测每个理论，如果存在一个理论可以传播，就返回true
     bool context::can_theories_propagate() const {
         for (theory* t : m_theory_set) {
             if (t->can_propagate()) {
@@ -1666,24 +1695,25 @@ namespace smt {
         }
         return false;
     }
-
+    //判断是否可以继续传播
     bool context::can_propagate() const {
-        return
-            m_qhead != m_assigned_literals.size() ||
-            m_relevancy_propagator->can_propagate() ||
-            !m_atom_propagation_queue.empty() ||
-            m_qmanager->can_propagate() ||
-            can_theories_propagate() ||
-            !m_eq_propagation_queue.empty() ||
-            !m_th_eq_propagation_queue.empty() ||
-            !m_th_diseq_propagation_queue.empty();
+        return//满足如下情况之一都是可以继续传播的
+            m_qhead != m_assigned_literals.size() ||//如果所有已经赋值的文字都已经被考察
+            m_relevancy_propagator->can_propagate() ||//相关性传播非空
+            !m_atom_propagation_queue.empty() ||//待传播的原子队列非空
+            m_qmanager->can_propagate() ||//理论传播量词
+            can_theories_propagate() ||//可以理论传播
+            !m_eq_propagation_queue.empty() ||//尚可以传播等式
+            !m_th_eq_propagation_queue.empty() ||//尚可以传播理论等式
+            !m_th_diseq_propagation_queue.empty();//尚可传播理论不等式
     }
 
     /**
        \brief retrieve facilities for creating induction lemmas.
+       检索用于创建归纳引理的工具。
      */
     induction& context::get_induction() {
-        if (!m_induction) {
+        if (!m_induction) {//如果m_induction不存在，则分配一个
             m_induction = alloc(induction, *this, get_manager());
         }
         return *m_induction;
@@ -1692,46 +1722,50 @@ namespace smt {
     /**
        \brief unit propagation.
        Cancelation is not safe during propagation at base level because
-       congruences cannot be retracted to a consistent state.
+       congruences cannot be retracted to a consistent state. 在底层传播期间取消是不安全的，因为同于不能恢复到一致状态
+       单元传播
+       返回是否需要decide
+       如果不一致则返回false，
+       如果不能传播了，则返回true，此时需要进行decide操作；或者如果资源耗尽了，就需要跳出走向unknown
      */
     bool context::propagate() {
         TRACE("propagate", tout << "propagating... " << m_qhead << ":" << m_assigned_literals.size() << "\n";);
         while (true) {
-            if (inconsistent())
+            if (inconsistent())//如果已经有不一致，则说明需要回溯再传播，还不需要decide
                 return false;
-            unsigned qhead = m_qhead;
+            unsigned qhead = m_qhead;//记录下旧的m_qhead，指向bcp尚未处理的assigned文字，m_qhead会在bcp的过程中变化，而其余传播要从旧的m_qhead开始
             {
                 scoped_suspend_rlimit _suspend_cancel(m.limit(), at_base_level());
-                if (!bcp())
+                if (!bcp())//对bool变量进行传播
                     return false;
-                if (!propagate_th_case_split(qhead))
+                if (!propagate_th_case_split(qhead))//传播理论case_split，如果发生冲突，就返回false，该操作不会改变m_head
                     return false;
-                SASSERT(!inconsistent());
-                propagate_relevancy(qhead);
+                SASSERT(!inconsistent());//在进行了BCP和理论case_split传播之后，如果能走到这里一定是一致的，如果不一致则会在前面传播时return false
+                propagate_relevancy(qhead);//传播相关性
                 if (inconsistent())
                     return false;
-                if (!propagate_atoms())
+                if (!propagate_atoms())//传播原子
                     return false;
-                if (!propagate_eqs())
+                if (!propagate_eqs())//传播命题层面的等式
                     return false;
-                propagate_th_eqs();
-                propagate_th_diseqs();
+                propagate_th_eqs();//传播理论等式
+                propagate_th_diseqs();//传播理论不等式
                 if (inconsistent())
                     return false;
-                if (!propagate_theories())
+                if (!propagate_theories())//理论传播
                     return false;
             }
             if (!get_cancel_flag()) {
                 scoped_suspend_rlimit _suspend_cancel(m.limit(), at_base_level());
-                m_qmanager->propagate();
+                m_qmanager->propagate();//如果已经取消了，则需要量词传播？
             }
             if (inconsistent())
                 return false;
-            if (resource_limits_exceeded()) {
+            if (resource_limits_exceeded()) {//如果已经资源耗尽了，则需要将m_qhead恢复到之旧的
                 m_qhead = qhead;
                 return true;
             }
-            if (!can_propagate()) {
+            if (!can_propagate()) {//如果已经不能传播了，则说明需要decide了，就返回true
                 CASSERT("diseq_bug", inconsistent() || check_missing_diseq_conflict());
                 CASSERT("eqc_bool", check_eqc_bool_assignment());
                 return true;
@@ -1739,6 +1773,7 @@ namespace smt {
         }
     }
 
+    //设置冲突，如果不一致就设置冲突为js，如果not_l为空，则冲突中只包含js
     void context::set_conflict(const b_justification & js, literal not_l) {
         if (!inconsistent()) {
             TRACE("set_conflict", display_literal_verbose(tout << m_scope_lvl << " ", not_l); display(tout << " ", js); );
@@ -1773,24 +1808,25 @@ namespace smt {
     /**
        \brief Execute next case split, return false if there are no
        more case splits to be performed.
+       执行下一个case split，如果没有case_split可以操作就返回false
     */
     bool context::decide() {
 
         if (at_search_level() && !m_tmp_clauses.empty()) {
-            switch (decide_clause()) {
-            case l_true:  // already satisfied
+            switch (decide_clause()) {//考虑在tmp_clause中决策子句
+            case l_true:  // already satisfied 如果tmp_clause中的所有子句已经满足，就执行下面代码
                 break;
-            case l_undef: // made a decision
+            case l_undef: // made a decision 如果未定义，就做决策，并返回true，因为已经在decide_clause中做过决策了
                 return true;
-            case l_false: // inconsistent
+            case l_false: // inconsistent 如果不一致就说明没有可以case_split的操作，因为在tmp_clause中已经有一个子句不满足了，并且设置了冲突
                 return false;
             }
         }
         bool_var var;
         lbool phase = l_undef;
-        m_case_split_queue->next_case_split(var, phase);
+        m_case_split_queue->next_case_split(var, phase);//在tmp_clause中的所有子句已经满足了的前提下，var是将要选择的变量，phase返回为undef，（其实主要返回的是var，phase总是undef）
 
-        if (var == null_bool_var) {
+        if (var == null_bool_var) {//如果var是空的，意味着没有可以选择的变量
             return false;
         }
 
@@ -1805,46 +1841,46 @@ namespace smt {
                       tout << "\n";);
             }});
 
-        m_stats.m_num_decisions++;
+        m_stats.m_num_decisions++;//决策数加一
 
-        push_scope();
+        push_scope();//创造中间回退点
         TRACE("decide", tout << "splitting, lvl: " << m_scope_lvl << "\n";);
 
         TRACE("decide_detail", tout << mk_pp(bool_var2expr(var), m) << "\n";);
 
         bool is_pos;
 
-        if (is_quantifier(m_bool_var2expr[var])) {
+        if (is_quantifier(m_bool_var2expr[var])) {//如果var是一个量词，重写任何对于量词的决策，将一个量词赋值为false相当于将其设为不相关
             // Overriding any decision on how to assign the quantifier.
             // assigning a quantifier to false is equivalent to make it irrelevant.
             phase = l_false;
         }
-        literal l(var, false);
+        literal l(var, false);//l是var对应的true文字
 
         if (phase != l_undef) {
-            is_pos = phase == l_true;
+            is_pos = phase == l_true;//如果phase不是undef，就判断其是否为true
         }
-        else {
+        else {//phase是undef
             bool_var_data & d = m_bdata[var];
             if (d.try_true_first()) {
                 is_pos = true;
             }
             else {
                 switch (m_fparams.m_phase_selection) {
-                case PS_THEORY: 
+                case PS_THEORY: //理论模式
                     if (m_phase_cache_on && d.m_phase_available) {
-                        is_pos = m_bdata[var].m_phase;
+                        is_pos = m_bdata[var].m_phase;//如果选用来caching技术，则根据m_phase来确定赋值
                         break;
                     }
-                    if (!m_phase_cache_on && d.is_theory_atom()) {
+                    if (!m_phase_cache_on && d.is_theory_atom()) {//如果没有使用caching技术并且是一个理论原子
                         theory * th = m_theories.get_plugin(d.get_theory());
-                        lbool th_phase = th->get_phase(var);
+                        lbool th_phase = th->get_phase(var);//通过理论获得该变量的phase
                         if (th_phase != l_undef) {
                             is_pos = th_phase == l_true;
                             break;
                         }
                     }
-                    if (track_occs()) {
+                    if (track_occs()) {//根据出现次数来定赋值
                         if (m_lit_occs[l.index()] == 0) {
                             is_pos = false;
                             break;
@@ -1857,8 +1893,8 @@ namespace smt {
                     is_pos = m_phase_default;                    
                     break;
                 case PS_CACHING:
-                case PS_CACHING_CONSERVATIVE:
-                case PS_CACHING_CONSERVATIVE2:
+                case PS_CACHING_CONSERVATIVE://这是默认的方法
+                case PS_CACHING_CONSERVATIVE2://根据caching技术来，如果选择了caching，就根据m_phase来确定赋值
                     if (m_phase_cache_on && d.m_phase_available) {
                         TRACE("phase_selection", tout << "using cached value, is_pos: " << m_bdata[var].m_phase << ", var: p" << var << "\n";);
                         is_pos = m_bdata[var].m_phase;
@@ -1875,10 +1911,10 @@ namespace smt {
                     is_pos = true;
                     break;
                 case PS_RANDOM:
-                    is_pos = (m_random() % 2 == 0);
+                    is_pos = (m_random() % 2 == 0);//如果是随机模式，则任意返回pos的值
                     break;
                 case PS_OCCURRENCE: {
-                    is_pos = m_lit_occs[l.index()] > m_lit_occs[(~l).index()];
+                    is_pos = m_lit_occs[l.index()] > m_lit_occs[(~l).index()];//根据出现次数来确定赋值，如果l的出现次数比其非高，就设置为true
                     break;
                 }
                 default:
@@ -1888,14 +1924,15 @@ namespace smt {
             }
         }
 
-        if (!is_pos) l.neg();
+        if (!is_pos) l.neg();//如果phase不是pos，就将l取反，is_pos可以控制相应的赋值
         TRACE("decide", tout << "case split " << l << "\n" << "activity: " << get_activity(var) << "\n";);
-        assign(l, b_justification::mk_axiom(), true);
-        return true;
+        assign(l, b_justification::mk_axiom(), true);//将l设置为真，即赋值l的变量使得l为真
+        return true;//此处也做完了决策，返回true表明成功做了决策
     }
 
     /**
        \brief Update counter that is used to enable/disable phase caching.
+       更新用来控制phase caching的计数器
     */
     void context::update_phase_cache_counter() {
         m_phase_counter++;
@@ -1919,6 +1956,7 @@ namespace smt {
 
     /**
        \brief Create an internal backtracking point
+       创造中间回退点
     */
     void context::push_scope() {
 
@@ -1950,7 +1988,7 @@ namespace smt {
     }
 
     /**
-       \brief Execute generic undo-objects.
+       \brief Execute generic undo-objects.执行泛化的消除对象操作
     */
     void context::undo_trail_stack(unsigned old_size) {
         ::undo_trail_stack(*this, m_trail_stack, old_size);
@@ -1958,7 +1996,7 @@ namespace smt {
 
     /**
        \brief Remove watch literal idx from the given clause.
-
+        将watch文字从给定子句中消除，此处的idx必须是0或者1
        \pre idx must be 0 or 1.
     */
     void context::remove_watch_literal(clause * cls, unsigned idx) {
@@ -1966,7 +2004,7 @@ namespace smt {
     }
 
     /**
-       \brief Remove boolean variable from watch lists.
+       \brief Remove boolean variable from watch lists.将布尔变量从watch list中移除,无调用
     */
     void context::remove_watch(bool_var v) {
         literal lit(v);
@@ -1975,7 +2013,7 @@ namespace smt {
     }
 
     /**
-       \brief Remove clause
+       \brief Remove clause，删除子句的occ，该方法会在del_clause中被调用
     */
 
     void context::remove_cls_occs(clause * cls) {
@@ -1985,16 +2023,16 @@ namespace smt {
     }
 
     /**
-       \brief Update occurrence count of literals
+       \brief Update occurrence count of literals 更新文字的出现次数
     */
-
+   //对于子句cls中的每个文字添加occ，在reinit_clause中被调用
     void context::add_lit_occs(clause const& cls) {
         if (!track_occs()) return;
         for (literal l : cls) {
             inc_ref(l);
         }
     }
-
+    //对于子句中的每个小于nbv的文字，减少occ，在remove_cls_occ，reinit_clause和del_clause中被调用
     void context::remove_lit_occs(clause const& cls, unsigned nbv) {
         if (!track_occs()) return;
         for (literal l : cls) {
@@ -2003,14 +2041,14 @@ namespace smt {
         }
     }
 
-    // TBD: enable as assertion when ready to re-check
+    // TBD: enable as assertion when ready to re-check 当准备好重新检测时 作为断言启用
     void context::dec_ref(literal l) { if (track_occs() && m_lit_occs[l.index()] > 0) m_lit_occs[l.index()]--; }
-
+    //增加l的变量对应的m_lit_occs
     void context::inc_ref(literal l) { if (track_occs()) m_lit_occs[l.index()]++; }
 
     /**
        \brief Delete the given clause.
-
+        删除一个指定的子句，该子句不能在reinit栈中
        \pre Clause is not in the reinit stack.
     */
     void context::del_clause(bool log, clause * cls) {
@@ -2027,6 +2065,7 @@ namespace smt {
     /**
        \brief Delete the clauses in v at locations [old_size .. v.size())
        Reduce the size of v to old_size.
+       删除old_size之后的在clause列表v中的所有子句,在pop_scope_core和flush中调用
     */
     void context::del_clauses(clause_vector & v, unsigned old_size) {
         unsigned num_collect = v.size() - old_size;
@@ -2035,7 +2074,7 @@ namespace smt {
         
         clause_vector::iterator begin = v.begin() + old_size;
         clause_vector::iterator it    = v.end();
-        if (num_collect > 1000) {
+        if (num_collect > 1000) {//根据要删除的子句数量来定，如果要删除的数量较多
             uint_set watches;
             while (it != begin) {
                 --it;
@@ -2056,7 +2095,7 @@ namespace smt {
             }
             m_stats.m_num_del_clause += (v.size() - old_size);
         }
-        else {
+        else {//如果要删除的子句数量较少，就直接一个一个地删除
             while (it != begin) {
                 --it;
                 del_clause(false, *it);
@@ -2068,31 +2107,33 @@ namespace smt {
 
     /**
        \brief Undo variable assignments.
+       取消一系列变量的赋值，直到删除到old_lim号，在pop_scope_core中被调用
     */
     void context::unassign_vars(unsigned old_lim) {
         SASSERT(old_lim <= m_assigned_literals.size());
 
-        unsigned i = m_assigned_literals.size();
-        while (i != old_lim) {
+        unsigned i = m_assigned_literals.size();//i是已经赋值的文字数
+        while (i != old_lim) {//删除i到old_lim个
             --i;
-            literal l                  = m_assigned_literals[i];
+            literal l                  = m_assigned_literals[i];//l是第i个待删除的文字
             CTRACE("assign_core", l.var() == 13, tout << "unassign " << l << "\n";);
-            m_assignment[l.index()]    = l_undef;
+            m_assignment[l.index()]    = l_undef;//设置l和l的非都是undef
             m_assignment[(~l).index()] = l_undef;
             bool_var v                 = l.var();
-            bool_var_data & d          = get_bdata(v);
-            d.set_null_justification();
-            m_case_split_queue->unassign_var_eh(v);
+            bool_var_data & d          = get_bdata(v);//找到v对应的变量数据
+            d.set_null_justification();//设置v对应的变量数据的证明为空
+            m_case_split_queue->unassign_var_eh(v);//将v加入到case_split队列中
         }
 
-        m_assigned_literals.shrink(old_lim);
-        m_qhead = old_lim;
+        m_assigned_literals.shrink(old_lim);//赋值变量的文字vector缩减到old_lim
+        m_qhead = old_lim;//队列头指向old_lim
         SASSERT(m_qhead == m_assigned_literals.size());
     }
 
     /**
        \brief Invoke method del_eh for the justification that will be deleted.
        If the method in_region() returns false, then delete operator is invoked.
+       为将要被删除的justification调用del_eh方法，如果in_regin方法返回false，则删除操作会被调用， 在pop_scope_core和flush中被调用
     */
     void context::del_justifications(ptr_vector<justification> & justifications, unsigned old_lim) {
         SASSERT(old_lim <= justifications.size());
@@ -2100,14 +2141,16 @@ namespace smt {
         while (i != old_lim) {
             --i;
             justification * js = justifications[i];
-            js->del_eh(m);
-            if (!js->in_region()) {
+            js->del_eh(m);//调用del_eh句柄，释放由该对象占用的资源
+            if (!js->in_region()) {//如果该justification不在域内，则直接回收相应的内存
                 dealloc(js);
             }
             else {
                 // If the justification is in a region, then explicitly invoke the destructor.
                 // This is needed because some justification objects contains vectors.
                 // The destructors of these vectors need to be invoked.
+                //如果justification在域内，则调用析构函数。
+                //这是必须的，因为一些justification对象包含数组，这些数组的析构函数需要被调用
                 js->~justification();
             }
         }
@@ -2116,6 +2159,7 @@ namespace smt {
 
     /**
        \brief Return true if all literals of c are assigned to false.
+       如果子句c中所有文字都是false则返回true
     */
     bool context::is_empty_clause(clause const * c) const {
         unsigned num_lits = c->get_num_literals();
@@ -2129,6 +2173,7 @@ namespace smt {
 
     /**
        \brief Return true if the given clause contains one and only one unassigned literal.
+       如果指定子句只包含一个未赋值的文字，返回true
     */
     bool context::is_unit_clause(clause const * c) const {
         bool found        = false;
@@ -2158,6 +2203,9 @@ namespace smt {
        the loop prevention heuristics used to control quantifier instantiation.
        Thus, I cache the generation number of enodes that will be deleted during backtracking
        and recreated by reinit_clauses.
+       当子句被重新初始化，enodes和文字可能需要被重新构造，当enode被重新构造时，我想用它被删之前曾经用的生成号。
+       否则该生成会是0，并且将影响用来控制量词实例化的环路预防启发式算法。
+       因此，我缓存了将在回溯中被删除，并且将在reinit_clauses过程中重新构造的enode的生成号，（会存在m_cached_generation中）
     */
     void context::cache_generation(unsigned new_scope_lvl) {
         if (!m_clauses_to_reinit.empty()) {
@@ -2237,7 +2285,7 @@ namespace smt {
     }
 
     /**
-       \brief See cache_generation(unsigned new_scope_lvl)
+       \brief See cache_generation(unsigned new_scope_lvl) 在resolve_confict和pop_scope_core中被调用
     */
     void context::reset_cache_generation() {
         m_cache_generation_visited.reset();
@@ -2251,6 +2299,8 @@ namespace smt {
        \remark num_bool_vars contains the number of boolean variables alive
        after backtracking. So, a clause contains a dead variable if it
        contains a literal l where l.var() >= num_bool_vars.
+       重新初始化包含 在回退过程中被删除的布尔变量 的学习子句（lemma）在 pop_scope_core 中被调用
+       num_bool_vars包含了在回退之后还存活的布尔变量的数目。因此如果一个子句包含了一个文字其变量号>num_bool_vars则该子句包含一个死变量（该子句需要被重新初始化）
     */
     void context::reinit_clauses(unsigned num_scopes, unsigned num_bool_vars) {
         TRACE("reinit_clauses_bug", display_watch_lists(tout););
@@ -2263,7 +2313,7 @@ namespace smt {
         }
         for (unsigned i = m_scope_lvl+1; i <= lim; i++) {
             clause_vector & v = m_clauses_to_reinit[i];
-            for (clause* cls : v) {
+            for (clause* cls : v) {//遍历从m_scope_lvl+1后面num_scopes层的需要reinit的子句集合中的子句，逐个reinit
                 if (cls->deleted()) {
                     cls->release_atoms(m);
                     cls->m_reinit              = false;
@@ -2274,11 +2324,11 @@ namespace smt {
                 bool keep = false;
                 if (cls->reinternalize_atoms()) {
                     SASSERT(cls->get_num_atoms() == cls->get_num_literals());
-                    for (unsigned j = 0; j < 2; j++) {
+                    for (unsigned j = 0; j < 2; j++) {//考察子句cls的watch 文字
                         literal l           = cls->get_literal(j);
                         if (l.var() < static_cast<int>(num_bool_vars)) {
                             // This boolean variable was not deleted during backtracking
-                            //
+                            //该布尔变量在回退过程中没有被删除，则它还是一个watch 文字。因为该子句可能在重新初始化之后有新的watch文字，因此该watch被删除
                             // So, it is still a watch literal. I remove the watch, since
                             // the clause may have new watch-literals after reinitialization.
                             remove_watch_literal(cls, j);
@@ -2291,7 +2341,7 @@ namespace smt {
 
                     unsigned ilvl       = 0;
                     (void)ilvl;
-                    for (unsigned j = 0; j < num; j++) {
+                    for (unsigned j = 0; j < num; j++) {//遍历cls中的文字
                         expr * atom     = cls->get_atom(j);
                         bool   sign     = cls->get_atom_sign(j);
                         // Atom can be (NOT foo). This can happen, for example, when
@@ -2324,8 +2374,8 @@ namespace smt {
                     literal l2 = cls->get_literal(1);
 
                     if (get_assignment(l1) == l_false)
-                        set_conflict(b_justification(cls));
-                    else if (get_assignment(l2) == l_false)
+                        set_conflict(b_justification(cls));//如果l1是false，说明该子句本就是全false，则是冲突
+                    else if (get_assignment(l2) == l_false)//如果l1是true同时l2是false，说明该子句是单元子句，则要给l1赋值
                         assign(l1, b_justification(cls));
 
                     TRACE("reinit_clauses", tout << "reinit clause:\n"; display_clause_detail(tout, cls); tout << "\n";
@@ -2353,7 +2403,7 @@ namespace smt {
                 else {
                     // clause do not need to be in the reinit stack anymore,
                     // because it will be deleted when the base level is
-                    // backtracked.
+                    // backtracked.子句不需要再在reinit栈中了，因为当base level被回溯时它会被删除
                     cls->release_atoms(m);
                     cls->m_reinit              = false;
                     cls->m_reinternalize_atoms = false;
@@ -2364,7 +2414,7 @@ namespace smt {
         CASSERT("reinit_clauses", check_clauses(m_lemmas));
         TRACE("reinit_clauses_bug", display_watch_lists(tout););
     }
-
+    //在pop_scope_core中被调用，重新断言单元
     void context::reassert_units(unsigned units_to_reassert_lim) {
         unsigned i  = units_to_reassert_lim;
         unsigned sz = m_units_to_reassert.size();
@@ -2390,7 +2440,10 @@ namespace smt {
        is useful because it can be used to detect which boolean variables
        were deleted.
 
+        回溯num_scopes层，在重新初始化子句之前返回布尔变量的数目。该值是有用的，因为它可以用了检测哪个布尔变量被删除了,在resolve conflict和pop_scope中被调用
+       该方法不会调用reset_cache_generation
        \warning This method will not invoke reset_cache_generation.
+       
     */
     unsigned context::pop_scope_core(unsigned num_scopes) {
         unsigned units_to_reassert_lim;
@@ -2407,7 +2460,7 @@ namespace smt {
 
             unsigned new_lvl = m_scope_lvl - num_scopes;
 
-            cache_generation(new_lvl);
+            cache_generation(new_lvl);//缓存将在回溯中被删除，并且将在reinit_clauses过程中重新构造的enode的生成号
             m_qmanager->pop(num_scopes);
             m_case_split_queue->pop_scope(num_scopes);
 
@@ -2470,21 +2523,22 @@ namespace smt {
         }
 
         // an exception can happen when axioms are reinitialized (because they are rewritten).
+        //意外可能在原子被重新初始化时出现，因为它们被重写了
 
         unsigned num_bool_vars = get_num_bool_vars();
-        // any variable >= num_bool_vars was deleted during backtracking.
+        // any variable >= num_bool_vars was deleted during backtracking. 任何变量>=num_bool_vars会在回退中被删除
         reinit_clauses(num_scopes, num_bool_vars);
         reassert_units(units_to_reassert_lim);
         TRACE("pop_scope_detail", tout << "end of pop_scope: \n"; display(tout););
         CASSERT("context", check_invariant());
         return num_bool_vars;
     }
-
+    //推出num_scopes层并且重置cache
     void context::pop_scope(unsigned num_scopes) {
         pop_scope_core(num_scopes);
         reset_cache_generation();
     }
-
+    //如果当前不在base层就要回退到base层
     void context::pop_to_base_lvl() {
         SASSERT(m_scope_lvl >= m_base_lvl);
         if (!at_base_level()) {
@@ -2493,7 +2547,7 @@ namespace smt {
         }
         SASSERT(m_scope_lvl == m_base_lvl);
     }
-
+    //将m_scope_lvl回退到m_search_lvl
     void context::pop_to_search_lvl() {
         if (m_scope_lvl > get_search_level()) {
             pop_scope(m_scope_lvl - get_search_level());
@@ -2503,16 +2557,17 @@ namespace smt {
     /**
        \brief Simplify the given clause using the assignment.  Return
        true if the clause was already satisfied, and false otherwise.
-
+        使用赋值来化简给定子句，如果该子句已经被满足了，就返回true，否则返回false，该方法只会在底层使用，在simplify_clauses中被调用
        \remark This method should only be invoked if we are at the
        base level.
+       
     */
     bool context::simplify_clause(clause& cls) {
         SASSERT(m_scope_lvl == m_base_lvl);
-        unsigned s = cls.get_num_literals();
+        unsigned s = cls.get_num_literals();//s表示该子句中的文字数量
         if (get_assignment(cls[0]) == l_true ||
             get_assignment(cls[1]) == l_true) {
-            // clause is already satisfied.
+            // clause is already satisfied.如果通过查看watch lit，该子句已经满足了，就直接返回true
             return true;
         }
 
@@ -2523,86 +2578,87 @@ namespace smt {
         bool is_taut = false;
         for(; i < s; i++) {
             literal l = cls[i];
-            switch(get_assignment(l)) {
+            switch(get_assignment(l)) {//逐个遍历子句中的文字
             case l_false:
                 if (m.proofs_enabled())
-                    simp_lits.push_back(~l);
+                    simp_lits.push_back(~l);//如果该文字已经是false的了，就将其放进simp_lits列表中
                 dec_ref(l);
                 break;
             case l_true:
-                is_taut = true;
+                is_taut = true;//如果已经是true，则本子句已经是true，并且要执行下面的
                 // fallthrough
             case l_undef:
                 if (i != j) {
-                    cls.swap_lits(i, j);
+                    cls.swap_lits(i, j);//把非false的往前移
                 }
-                j++;
+                j++;//j代表则非false的文字的序号
                 break;
             }
         }
 
-        if (j < s) {
-            m_clause_proof.shrink(cls, j);
+        if (j < s) {//如果不是所有的都是非false
+            m_clause_proof.shrink(cls, j);//就把子句给缩减小到j这么大，后面已经是false的部分直接不要了
             cls.set_num_literals(j);
             SASSERT(j >= 2);
         }
 
-        if (is_taut) {
+        if (is_taut) {//如果已经是true就直接返回
             return true;
         }
 
-        if (m.proofs_enabled() && !simp_lits.empty()) {
+        if (m.proofs_enabled() && !simp_lits.empty()) {//如果需要使用证明并且待删除的文字不为空，并且此时没有true的文字
             SASSERT(m_scope_lvl == m_base_lvl);
             justification * js = cls.get_justification();
             justification * new_js = nullptr;
-            if (js->in_region())
+            if (js->in_region())//
                 new_js = mk_justification(unit_resolution_justification(m_region,
                                                                         js,
                                                                         simp_lits.size(),
                                                                         simp_lits.c_ptr()));
             else
-                new_js = alloc(unit_resolution_justification, js, simp_lits.size(), simp_lits.c_ptr());
+                new_js = alloc(unit_resolution_justification, js, simp_lits.size(), simp_lits.c_ptr());//新的证明开辟新的region，并以js为祖先，并且将simp_lits复制到证明中
             cls.set_justification(new_js);
         }
-        return false;
+        return false;//目前该子句中尚存未满足的文字，因此返回false
     }
 
     /**
        \brief Simplify the given vector of clauses starting at the given position.
        Return the number of deleted (already satisfied) clauses.
+       化简给定的一个子句集合，从给定位置开始，返回删除的（已经满足的）子句数量
     */
     unsigned context::simplify_clauses(clause_vector & clauses, unsigned starting_at) {
         unsigned num_del_clauses = 0;
         clause_vector::iterator it  = clauses.begin();
         clause_vector::iterator end = clauses.end();
-        it += starting_at;
-        clause_vector::iterator it2 = it;
-        for(; it != end; ++it) {
-            clause * cls = *it;
-            SASSERT(!cls->in_reinit_stack());
+        it += starting_at;//it指向子句集合中starting_at的位置
+        clause_vector::iterator it2 = it;//存放的是还没有被满足的子句
+        for(; it != end; ++it) {//如果还没到达子句集合的末尾
+            clause * cls = *it;//cls是指向的子句
+            SASSERT(!cls->in_reinit_stack());//该子句应该不在reinit栈中
             
-            if (cls->deleted()) {
+            if (cls->deleted()) {//如果该子句已经被删除了
                 TRACE("simplify_clauses_bug", display_clause(tout << "deleted\n", cls) << "\n";);
-                del_clause(true, cls);
-                num_del_clauses++;
+                del_clause(true, cls);//删除给定子句
+                num_del_clauses++;//被删除子句数量加一
             }
-            else if (simplify_clause(*cls)) {
+            else if (simplify_clause(*cls)) {//如果该子句在通过当前赋值化简之后已经是可满足的了,则要删除该子句，如果该子句是其watch文字的验证，则可以安全地用原子替代
                 TRACE("simplify_clauses_bug", display_clause_smt2(tout << "simplified\n", *cls) << "\n";);
-                for (unsigned idx = 0; idx < 2; idx++) {
+                for (unsigned idx = 0; idx < 2; idx++) {//选取前两个文字作为watch lit考察
                     literal     l0        = (*cls)[idx];
-                    b_justification l0_js = get_justification(l0.var());
+                    b_justification l0_js = get_justification(l0.var());//获取watch相应的验证l0_js
                     if (l0_js != null_b_justification &&
                         l0_js.get_kind() == b_justification::CLAUSE &&
                         l0_js.get_clause() == cls) {
-                        // cls is the explanation of l0
-                        // it is safe to replace with axiom, we are at the base level.
+                        // cls is the explanation of l0  如果cls是l0的解释
+                        // it is safe to replace with axiom, we are at the base level. 则可以安全地用原子代替，目前是在最底层
                         SASSERT(m_scope_lvl == m_base_lvl);
                         bool_var v0 = l0.var();
-                        if (m.proofs_enabled()) {
-                            SASSERT(m_search_lvl == m_base_lvl);
+                        if (m.proofs_enabled()) {//如果使用了证明
+                            SASSERT(m_search_lvl == m_base_lvl);//确定目前是在最底层
                             literal_buffer simp_lits;
                             unsigned num_lits = cls->get_num_literals();
-                            for(unsigned i = 0; i < num_lits; i++) {
+                            for(unsigned i = 0; i < num_lits; i++) {//将该子句中的除了idx外的后面的文字都放进sim_lits中
                                 if (i != idx) {
                                     literal l = (*cls)[i];
                                     SASSERT(l != l0);
@@ -2613,7 +2669,7 @@ namespace smt {
                             justification * js = nullptr;
                             if (!cls_js || cls_js->in_region()) {
                                 // If cls_js is 0 or is allocated in a region, then
-                                // we can allocate the new justification in a region too.
+                                // we can allocate the new justification in a region too. 如果子句的验证不存在或者在一个域中被分配，则也可以在该域中分配新的新的验证
                                 js = mk_justification(unit_resolution_justification(m_region,
                                                                                     cls_js,
                                                                                     simp_lits.size(),
@@ -2621,35 +2677,37 @@ namespace smt {
                             }
                             else {
                                 js = alloc(unit_resolution_justification, cls_js, simp_lits.size(), simp_lits.c_ptr());
-                                // js took ownership of the justification object.
+                                // js took ownership of the justification object. js取的了对justification对象的所有权
                                 cls->set_justification(nullptr);
                                 m_justifications.push_back(js);
                             }
                             set_justification(v0, m_bdata[v0], b_justification(js));
                         }
                         else
-                            m_bdata[v0].set_axiom();
+                            m_bdata[v0].set_axiom();//如果不使用证明，就为l0位置的变量的验证设置为原子
                     }
                 }
-                del_clause(true, cls);
+                del_clause(true, cls);//删除已经满足了的子句
                 num_del_clauses++;
             }
-            else {
-                *it2 = *it;
+            else {//如果目前该子句还没有被满足
+                *it2 = *it;//将未满足的子句号编到最后一个子句指针
                 ++it2;
-                m_simp_counter += cls->get_num_literals();
+                m_simp_counter += cls->get_num_literals();//化简后的文字数量
             }
         }
-        clauses.set_end(it2);
+        clauses.set_end(it2);//设置clauses的最后一个指针未it2
         CASSERT("simplify_clauses", check_invariant());
         return num_del_clauses;
     }
 
     /**
        \brief Simplify the set of clauses if possible (solver is at base level).
+       化简子句集合，仅当在base层才化简，在bounded search和restart中被调用
     */
     void context::simplify_clauses() {
         // Remark: when assumptions are used m_scope_lvl >= m_search_lvl > m_base_lvl. Therefore, no simplification is performed.
+        //如果假设不是在base层(m_scope_lvl >= m_search_lvl > m_base_lvl)，则不执行化简
         if (m_scope_lvl > m_base_lvl)
             return;
 
@@ -2680,10 +2738,12 @@ namespace smt {
         //
         // The value of the counter is decremented each time we visit
         // a variable during propagation.
-        //
+        //m_simp_counter是用来平衡simplify_clause的开销，在执行完simplify_clauses之后，
+        //该counter会估计再次执行simplify_clauses的开销，也就是需要被访问的文字数,每次我们在传播时访问一个变量，这个counter的值会下降
         m_simp_counter = 0;
         // the field m_simp_qhead is used to check whether there are
         // new assigned literals at the base level.
+        //m_simp_qhead用来检测是否会有在底层的新赋值文字
         m_simp_qhead = m_assigned_literals.size();
 
         unsigned num_del_clauses = 0;
@@ -2693,10 +2753,10 @@ namespace smt {
             num_del_clauses += simplify_clauses(m_aux_clauses, 0);
             num_del_clauses += simplify_clauses(m_lemmas, 0);
         }
-        else {
-            scope & s       = m_scopes[m_base_lvl - 1];
+        else {//如果base_lvl不在0层
+            scope & s       = m_scopes[m_base_lvl - 1];//通过m_base_lvl找到scope
             base_scope & bs = m_base_scopes[m_base_lvl - 1];
-            num_del_clauses += simplify_clauses(m_aux_clauses, s.m_aux_clauses_lim);
+            num_del_clauses += simplify_clauses(m_aux_clauses, s.m_aux_clauses_lim);//化简子句要根据上述的scope来决定开始编号
             num_del_clauses += simplify_clauses(m_lemmas, bs.m_lemmas_lim);
         }
         m_stats.m_num_del_clauses += num_del_clauses;
@@ -2707,11 +2767,12 @@ namespace smt {
     }
 
     struct clause_lt {
-        bool operator()(clause * cls1, clause * cls2) const { return cls1->get_activity() > cls2->get_activity(); }
+        bool operator()(clause * cls1, clause * cls2) const { return cls1->get_activity() > cls2->get_activity(); }//判断是否cls1的活跃度更高
     };
 
     /**
        \brief Delete low activity lemmas
+       删除一些低活跃度的引理,在restart和bounded search中调用，根据参数来选择使用哪种删除引理的方式
     */
     inline void context::del_inactive_lemmas() {
         if (m_fparams.m_lemma_gc_strategy == LGC_NONE)
@@ -2728,6 +2789,7 @@ namespace smt {
 
     /**
        \brief Delete (approx.) half of low activity lemmas
+       删除近乎一半的低活跃度lemma（启发式部分）
     */
     void context::del_inactive_lemmas1() {
         unsigned sz            = m_lemmas.size();
@@ -2787,6 +2849,8 @@ namespace smt {
        A clause is deleted/retained based on its activity and relevancy. Clauses with several
        unassigned literals are considered less relevant. The threshold used for activity and relevancy
        depends on which group the clauses is in.
+       更复杂版本的lemma删除，这儿lemma 根据m_new_old_ratio参数被分为两类：新和旧，一个子句基于其活跃度和相关性被删除和返回。
+       带有一些未赋值文字的子句被认为是不太相关的。用于活跃度和相关性的阈值基于该子句所属的组。（启发式部分）
     */
     void context::del_inactive_lemmas2() {
         IF_VERBOSE(2, verbose_stream() << "(smt.delete-inactive-clauses "; verbose_stream().flush(););
@@ -2804,13 +2868,15 @@ namespace smt {
             clause * cls = m_lemmas[i];
             if (can_delete(cls)) {
                 if (cls->deleted()) {
-                    // clause is already marked for deletion
+                    // clause is already marked for deletion 如果该子句已经被标记要删除了
                     del_clause(true, cls);
                     num_del_cls++;
                     continue;
                 }
                 // A clause is deleted if it has low activity and the number of unknowns is greater than a threshold.
                 // The activity threshold depends on how old the clause is.
+                // 一个子句如果活跃度太低，并且unknowns的数量大于阈值，就会被删除
+                //活跃度阈值基于该子句有多老
                 unsigned act_threshold = m_fparams.m_old_clause_activity -
                     (m_fparams.m_old_clause_activity - m_fparams.m_new_clause_activity) * ((i - start_at) / real_sz);
                 if (cls->get_activity() < act_threshold) {
@@ -2833,6 +2899,7 @@ namespace smt {
 
     /**
        \brief Return true if "cls" has more than (or equal to) k unassigned literals.
+       逐个检测子句cls中的文字，如果有大于等于k个未赋值的文字，就返回true
     */
     bool context::more_than_k_unassigned_literals(clause * cls, unsigned k) {
         SASSERT(k > 0);
@@ -2851,6 +2918,7 @@ namespace smt {
 #ifdef Z3DEBUG
     /**
        \brief Return true if a symbol of the given theory was already internalized.
+       如果给定理论的symbol已经被内化了就返回true
     */
     bool context::already_internalized_theory(theory * th) const {
         return already_internalized_theory_core(th, m_b_internalized_stack) || already_internalized_theory_core(th, m_e_internalized_stack);
@@ -2872,27 +2940,27 @@ namespace smt {
         return false;
     }
 #endif
-
+//注册插件，参数是理论，向m_theories中注册该理论，并初始化该理论，依次向th中push_scope
     void context::register_plugin(theory * th) {
         if (m_theories.get_plugin(th->get_family_id()) != nullptr) {
             dealloc(th);
-            return; // context already has a theory for the given family id.
+            return; // context already has a theory for the given family id.如果context已经有了一个对给定family id的理论，就返回，因为该理论已经被注册
         }
         TRACE("internalize", tout << this << " " << th->get_family_id() << "\n";);
         SASSERT(std::find(m_theory_set.begin(), m_theory_set.end(), th) == m_theory_set.end());
-        m_theories.register_plugin(th);
-        th->init();
-        m_theory_set.push_back(th);
+        m_theories.register_plugin(th);//就向m_theories中注册该理论
+        th->init();//初始化该理论
+        m_theory_set.push_back(th);//向理论集合中加入th
         {
 #ifdef Z3DEBUG
             // It is unsafe to invoke push_trail from the method push_scope_eh.
             flet<bool> l(m_trail_enabled, false);
 #endif
-            for (unsigned i = 0; i < m_scope_lvl; ++i)
+            for (unsigned i = 0; i < m_scope_lvl; ++i)//依次向th中push_scope
                 th->push_scope_eh();
         }
     }
-
+//初始化用户传播，将用户传播器注册插件
     void context::user_propagate_init(
         void*                    ctx, 
         solver::push_eh_t&       push_eh,
@@ -2905,7 +2973,7 @@ namespace smt {
             m_user_propagator->push_scope_eh();
         register_plugin(m_user_propagator);
     }
-
+    //在propagate_bool_var_enode中被调用，使用了用户传播 并且 用户传播已经被固定 并且 用户传播对应的理论变量不为空
     bool context::watches_fixed(enode* n) const {
         return m_user_propagator && m_user_propagator->has_fixed() && n->get_th_var(m_user_propagator->get_family_id()) != null_theory_var;
     }
@@ -2919,13 +2987,13 @@ namespace smt {
         pop_to_base_lvl();
         setup_context(false);
         bool was_consistent = !inconsistent();
-        internalize_assertions(); // internalize assertions before invoking m_asserted_formulas.push_scope
+        internalize_assertions(); // internalize assertions before invoking m_asserted_formulas.push_scope 在调用push_scope之前先中间化断言
         if (!m.inc())
             throw default_exception("push canceled");
         scoped_suspend_rlimit _suspend_cancel(m.limit());
         propagate();
         if (was_consistent && inconsistent() && !m_asserted_formulas.inconsistent()) {
-            // logical context became inconsistent during user PUSH
+            // logical context became inconsistent during user PUSH 逻辑context在进行用户PUSH的时候变为不一致，则要构建proof
             VERIFY(!resolve_conflict()); // build the proof
         }
         push_scope();
@@ -2935,10 +3003,10 @@ namespace smt {
         bs.m_inconsistent = inconsistent();
         bs.m_simp_qhead_lim = m_simp_qhead;
         m_base_lvl++;
-        m_search_lvl++; // Not really necessary. But, it is useful to enforce the invariant m_search_lvl >= m_base_lvl
+        m_search_lvl++; // Not really necessary. But, it is useful to enforce the invariant m_search_lvl >= m_base_lvl 并不必要，但是对于迫使保持m_search_lvl >= m_base_lvl 有用
         SASSERT(m_base_lvl <= m_scope_lvl);
     }
-
+    //在base的基础上推出num_scopes层。先退回到base层，然后pop_scope(num_scopes)
     void context::pop(unsigned num_scopes) {
         SASSERT (num_scopes > 0);
         if (num_scopes > m_scope_lvl) return;
@@ -2947,7 +3015,7 @@ namespace smt {
     }
 
     /**
-       \brief Free memory allocated by logical context.
+       \brief Free memory allocated by logical context. 释放被逻辑context分配的内存
     */
     void context::flush() {
         flet<bool> l1(m_flushing, true);
@@ -2955,9 +3023,9 @@ namespace smt {
         m_relevancy_propagator = nullptr;
         m_model_generator->reset();
         for (theory* t : m_theory_set) {
-            t->flush_eh();
+            t->flush_eh();//对于每个理论集合中的理论都释放相应的内存
         }
-        del_clauses(m_aux_clauses, 0);
+        del_clauses(m_aux_clauses, 0);//删除aux_clauses
         del_clauses(m_lemmas, 0);
         del_justifications(m_justifications, 0);
         reset_tmp_clauses();
@@ -2971,7 +3039,7 @@ namespace smt {
         }
         std::for_each(m_almost_cg_tables.begin(), m_almost_cg_tables.end(), delete_proc<almost_cg_table>());
     }
-
+    //assert表达式的核心，调用m_asserted_formulas的assert_expr函数，加入断言到公式列表中去
     void context::assert_expr_core(expr * e, proof * pr) {
         if (get_cancel_flag()) return;
         SASSERT(is_well_sorted(m, e));
@@ -2988,12 +3056,12 @@ namespace smt {
     void context::assert_expr(expr * e) {
         assert_expr(e, nullptr);
     }
-
+    //assert一个表达式，调用assert_expr_core
     void context::assert_expr(expr * e, proof * pr) {
         timeit tt(get_verbosity_level() >= 100, "smt.simplifying");
         assert_expr_core(e, pr);
     }
-
+    //一个trail元素用一个文字表示，在mk_case_split中被push_trail调用
     class case_split_insert_trail : public trail<context> {
         literal l;
     public:
@@ -3007,8 +3075,8 @@ namespace smt {
 
     void context::mk_th_case_split(unsigned num_lits, literal * lits) {
         TRACE("theory_case_split", display_literals_verbose(tout << "theory case split: ", num_lits, lits); tout << std::endl;);
-        // If we don't use the theory case split heuristic,
-        // for each pair of literals (l1, l2) we add the clause (~l1 OR ~l2)
+        // If we don't use the theory case split heuristic, 如果不实用理论case split启发式
+        // for each pair of literals (l1, l2) we add the clause (~l1 OR ~l2) 对于每对文字(l1,l2)添加(~l1 V ~l2)来强迫最多只能欧一个文字被赋值为true
         // to enforce the condition that at most one literal can be assigned 'true'.
         if (!m_fparams.m_theory_case_split) {
             if (!m.proofs_enabled()) {
@@ -3050,7 +3118,7 @@ namespace smt {
     void context::add_theory_aware_branching_info(bool_var v, double priority, lbool phase) {
         m_case_split_queue->add_theory_aware_branching_info(v, priority, phase);
     }
-
+    //取消case split，在case_split_insert_trail的undo中被调用
     void context::undo_th_case_split(literal l) {
         m_all_th_case_split_literals.remove(l.index());
         if (m_literal2casesplitsets.contains(l.index())) {
@@ -3059,42 +3127,43 @@ namespace smt {
             }
         }
     }
-
+    //传播理论case_split文字，该操作不会改变m_head，对于某一类理论case，如果选中了其中了一种，则其他的都要是假，例如选中了a<1则a>2，a>3等都要为假,在propogate中被调用
     bool context::propagate_th_case_split(unsigned qhead) {
-        if (m_all_th_case_split_literals.empty())
+        if (m_all_th_case_split_literals.empty())//如果所有理论case split的文字集合为空，则直接返回
             return true;
 
         // iterate over all literals assigned since the last time this method was called,
         // not counting any literals that get assigned by this method
         // this relies on bcp() to give us its old m_qhead and therefore
         // bcp() should always be called before this method
-
+        //迭代 自上次调用此方法以来 分配的所有文字，不算被该方法赋值的文字
+        //这依赖于bcp提供了旧的m_qhead指向还未处理的已赋值变量，因此bcp要在该方法之前调用
         unsigned assigned_literal_end = m_assigned_literals.size();
-        for (; qhead < assigned_literal_end; ++qhead) {
+        for (; qhead < assigned_literal_end; ++qhead) {//逐个迭代赋值了的文字
             literal l = m_assigned_literals[qhead];
             TRACE("theory_case_split", tout << "check literal " << l.index() << std::endl; display_literal_verbose(tout, l); tout << std::endl;);
-            // check if this literal participates in any theory case split
-            if (!m_all_th_case_split_literals.contains(l.index())) {
+            // check if this literal participates in any theory case split 检测该文字是否参与了理论case split
+            if (!m_all_th_case_split_literals.contains(l.index())) {//如果该文字没有参与任何理论case_split，则跳过
                 continue;
             }
             TRACE("theory_case_split", tout << "assigned literal " << l.index() << " is a theory case split literal" << std::endl;);
-            // now find the sets of literals which contain l
+            // now find the sets of literals which contain l 现在寻找包含l的文字集合，现在该文字参与了理论case_split
             vector<literal_vector> const& case_split_sets = m_literal2casesplitsets[l.index()];
             for (vector<literal_vector>::const_iterator it = case_split_sets.begin(); it != case_split_sets.end(); ++it) {
-                literal_vector case_split_set = *it;
+                literal_vector case_split_set = *it;//遍历所有的文字队列case_split_set，其他的文字统统为假
                 TRACE("theory_case_split", tout << "found case split set { ";
                       for(literal_vector::iterator set_it = case_split_set.begin(); set_it != case_split_set.end(); ++set_it) {
                           tout << set_it->index() << " ";
                       }
                       tout << "}" << std::endl;);
                 for(literal_vector::iterator set_it = case_split_set.begin(); set_it != case_split_set.end(); ++set_it) {
-                    literal l2 = *set_it;
-                    if (l2 != l) {
+                    literal l2 = *set_it;//遍历case_split_set中的每一个文字l2
+                    if (l2 != l) {//如果case_split_set中的文字l2不等于l
                         b_justification js(l);
                         TRACE("theory_case_split", tout << "case split literal "; l2.display(tout, m, m_bool_var2expr.c_ptr()); tout << std::endl;);
-                        if (l2 == true_literal || l2 == false_literal || l2 == null_literal) continue;
-                        assign(~l2, js);
-                        if (inconsistent()) {
+                        if (l2 == true_literal || l2 == false_literal || l2 == null_literal) continue;//如果l2是一个true或者false（永真或永假）或者空文字，则跳过
+                        assign(~l2, js);//要设置l2的非为真，如果l2已经为真，则汇报冲突，l作为非l2的验证
+                        if (inconsistent()) {//发现冲突
                             TRACE("theory_case_split", tout << "conflict detected!" << std::endl;);
                             return false;
                         }
@@ -3105,14 +3174,14 @@ namespace smt {
         // if we get here without detecting a conflict, we're fine
         return true;
     }
-
+    //消除断言的公式，在internalize_assertions中被调用
     void context::reduce_assertions() {
         if (!m_asserted_formulas.inconsistent()) {
             // SASSERT(at_base_level());
-            m_asserted_formulas.reduce();
+            m_asserted_formulas.reduce();//消除断言的公式
         }
     }
-
+    //判断是否是有效的假设，在validate_assumptions中被调用
     static bool is_valid_assumption(ast_manager & m, expr * a) {
         expr* arg;
         if (!m.is_bool(a))
@@ -3131,13 +3200,13 @@ namespace smt {
             return true;
         return false;
     }
-
+    //中间化“代理”，在init_assumptions中使用
     void context::internalize_proxies(expr_ref_vector const& asms, vector<std::pair<expr*,expr_ref>>& asm2proxy) {
         for (expr* e : asms) {
-            if (is_valid_assumption(m, e)) {
+            if (is_valid_assumption(m, e)) {//如果asms中的表达式是valid，将其加入到asm2proxy中
                 asm2proxy.push_back(std::make_pair(e, expr_ref(e, m)));
             }
-            else {
+            else {//如果表达式不是valid，先向m_asserted_formulas中加入一个imply(proxy,e)，然后将(e,proxy)加入到asm2proxy中
                 expr_ref proxy(m), fml(m);
                 proxy = m.mk_fresh_const("proxy", m.mk_bool_sort());
                 fml = m.mk_implies(proxy, e);
@@ -3146,40 +3215,41 @@ namespace smt {
             }
         }
         // The new assertions are of the form 'proxy => assumption'
-        // so clause simplification is sound even as these are removed after pop_scope.
+        // so clause simplification is sound even as these are removed after pop_scope.新的断言以“代理=>假设”的形式，所以子句化简是可靠的，即使在pop_scope之后
         internalize_assertions();
     }
 
+    //中间化assertion，如果断言的公式是一致的，就遍历所有公式并中间化该子句，如果存在不一致，就要调用asserted_inconsistent来设置冲突
     void context::internalize_assertions() {
         if (get_cancel_flag()) return;
         TRACE("internalize_assertions", tout << "internalize_assertions()...\n";);
         timeit tt(get_verbosity_level() >= 100, "smt.preprocessing");
         reduce_assertions();
         if (get_cancel_flag()) return;
-        if (!m_asserted_formulas.inconsistent()) {
-            unsigned sz    = m_asserted_formulas.get_num_formulas();
-            unsigned qhead = m_asserted_formulas.get_qhead();
-            while (qhead < sz) {
+        if (!m_asserted_formulas.inconsistent()) {//如果断言的公式不是不一致的
+            unsigned sz    = m_asserted_formulas.get_num_formulas();//sz是公式数量
+            unsigned qhead = m_asserted_formulas.get_qhead();//qhead指向公式的第一个
+            while (qhead < sz) {//遍历所有公式
                 if (get_cancel_flag()) {
                     m_asserted_formulas.commit(qhead);
                     return;
                 }
-                expr * f   = m_asserted_formulas.get_formula(qhead);
-                proof * pr = m_asserted_formulas.get_formula_proof(qhead);
+                expr * f   = m_asserted_formulas.get_formula(qhead);//获得位列qhead号的公式
+                proof * pr = m_asserted_formulas.get_formula_proof(qhead);//获得位列qhead号的证明
                 SASSERT(!pr || f == m.get_fact(pr));
-                internalize_assertion(f, pr, 0);
+                internalize_assertion(f, pr, 0);//中间化该子句
                 qhead++;
             }
             m_asserted_formulas.commit();
         }
         if (m_asserted_formulas.inconsistent() && !inconsistent()) {
-            asserted_inconsistent();
+            asserted_inconsistent();//如果存在不一致，就要调用asserted_inconsistent来设置冲突
         }
         TRACE("internalize_assertions", tout << "after internalize_assertions()...\n";
               tout << "inconsistent: " << inconsistent() << "\n";);
         TRACE("after_internalize_assertions", display(tout););
     }
-
+    //断言不一致时进行的操作，先获取断言的公式的不一致证明作为unsat证明，然后设置冲突,在search和internalize_assertions中被调用
     void context::asserted_inconsistent() {
         proof * pr = m_asserted_formulas.get_inconsistency_proof();
         m_unsat_proof = pr;
@@ -3193,89 +3263,96 @@ namespace smt {
 
     /**
        \brief Assumptions must be uninterpreted boolean constants (aka propositional variables).
+       假设必须是未解释的布尔常数，（也就是命题变量），如果有不是的就返回false,在check中被调用
+       遍历asm中的各个假设，如果其中有个不是valid就返回false
     */
     bool context::validate_assumptions(expr_ref_vector const& asms) {
         for (expr* a : asms) {
             SASSERT(a);
-            if (!is_valid_assumption(m, a)) {
+            if (!is_valid_assumption(m, a)) {//遍历expr_ref_vector中的各个expr，如果有一个不满足是valid假设就返回，并警告：一个假设一定要是个命题变量
                 warning_msg("an assumption must be a propositional variable or the negation of one");
                 return false;
             }
         }
         return true;
     }
-
+    //初始化子句
     void context::init_clause(expr_ref_vector const& _clause) {
         literal_vector lits;
-        for (expr* lit : _clause) {
-            internalize_formula(lit, true);
-            mark_as_relevant(lit);
-            lits.push_back(get_literal(lit));
+        for (expr* lit : _clause) {//遍历子句中的文字
+            internalize_formula(lit, true);//internalize各个文字
+            mark_as_relevant(lit);//将该文字标记为相关
+            lits.push_back(get_literal(lit));//在lits的列表中加入该文字
         }
         clause* clausep = nullptr;
-        if (lits.size() >= 2) {
+        if (lits.size() >= 2) {//如果该子句中的文字数量大于等于2
             justification* js = nullptr;
-            if (m.proofs_enabled()) {
-                proof * pr = mk_clause_def_axiom(lits.size(), lits.c_ptr(), nullptr);
-                js = mk_justification(justification_proof_wrapper(*this, pr));
+            if (m.proofs_enabled()) {//如果需要证明
+                proof * pr = mk_clause_def_axiom(lits.size(), lits.c_ptr(), nullptr);//设置一个证明pr
+                js = mk_justification(justification_proof_wrapper(*this, pr));//将这个证明作为一个验证js
             }
-            clausep = clause::mk(m, lits.size(), lits.c_ptr(), CLS_AUX, js);
+            clausep = clause::mk(m, lits.size(), lits.c_ptr(), CLS_AUX, js);//根据js和文字列表产生一个新的子句?
         }
-        m_tmp_clauses.push_back(std::make_pair(clausep, lits));
+        m_tmp_clauses.push_back(std::make_pair(clausep, lits));//将该子句放入暂时子句列表中？暂时子句（其中存放着子句指针clausesep和文字列表的pair）
     }
-
+    //重制tmp_clause列表，如果tmp_clause中的子句指针存在，就删除指定的子句
     void context::reset_tmp_clauses() {
         for (auto& p : m_tmp_clauses) {
-            if (p.first) del_clause(false, p.first);
+            if (p.first) del_clause(false, p.first);//如果tmp_clause中的子句指针存在，那就删除给定的子句
         }
         m_tmp_clauses.reset();
     }
 
+    //决策子句 在decide()中被调用
+    //如果所有子句都已经被满足了，就返回l_true
+    //如果存在一个子句已经为false：第一个文字就是false，就返回false，并且设置冲突
+    //如果在某个子句中存在未赋值变量就对其赋值，返回l_undef
     lbool context::decide_clause() {
-        if (m_tmp_clauses.empty()) return l_true;
-        for (auto & tmp_clause : m_tmp_clauses) {
-            literal_vector& lits = tmp_clause.second;
+        if (m_tmp_clauses.empty()) return l_true;//如果没有tmp_clause，就返回true
+        for (auto & tmp_clause : m_tmp_clauses) {//对于tmp_clause中的每个子句tmp_clause
+            literal_vector& lits = tmp_clause.second;//找到对应的文字列表lits
             literal unassigned = null_literal;
             for (literal l : lits) {
-                switch (get_assignment(l)) {
+                switch (get_assignment(l)) {//逐个验证lits中的文字l
                 case l_false:
-                    break;
+                    break;//如果找到了一个false的文字，就停止遍历lits
                 case l_true:
-                    goto next_clause;
+                    goto next_clause;//如果该子句已经sat了，则考察下一个子句
                 default:
-                    unassigned = l;
+                    unassigned = l;//找到了一个未赋值的文字
                 }         
             }
 
-            if (unassigned != null_literal) {
-                shuffle(lits.size(), lits.c_ptr(), m_random);
+            if (unassigned != null_literal) {//如果存在未赋值的文字（在第一个false文字之前出现过undef），说明可以赋值，返回undef
+                shuffle(lits.size(), lits.c_ptr(), m_random);//随机重排lits
                 push_scope();
-                assign(unassigned, b_justification::mk_axiom(), true);
+                assign(unassigned, b_justification::mk_axiom(), true);//对该未赋值文字赋值未真
                 return l_undef;
             }
-
-            if (lits.size() == 1) {
+            //如果在第一个false文字之前没有出现过undef，即第一个就是false（若是watch lit的方式说明该子句为false）
+            if (lits.size() == 1) {//如果只有该子句只有一个文字，说明这个文字不能被赋值为false，也就是冲突的原因
                 set_conflict(b_justification(), ~lits[0]);
             }
             else {
                 set_conflict(b_justification(tmp_clause.first), null_literal);
             }
             VERIFY(!resolve_conflict());
-            return l_false;
+            return l_false;//说明该子句已经为false，产生了冲突
         next_clause:
             ;
         }
         return l_true;
     }
-
+    //初始化假设
     void context::init_assumptions(expr_ref_vector const& asms) {
         reset_assumptions();
         m_literal2assumption.reset();
         m_unsat_core.reset();
         if (!asms.empty()) {
             // We must give a chance to the theories to propagate before we create a new scope...
+            //必须要先进行理论传播再构造一个新scope
             propagate();
-            // Internal backtracking scopes (created with push_scope()) must only be created when we are
+            // Internal backtracking scopes (created with push_scope()) must only be created when we are 内部回溯scope（随着push_scope()创造的）必须仅在一致状态下被创造
             // in a consistent context.
             if (inconsistent())
                 return;
@@ -3311,14 +3388,14 @@ namespace smt {
         SASSERT(!asms.empty() || m_search_lvl == m_base_lvl);
         TRACE("after_internalization", display(tout););
     }
-
+    //重制假设，对于假设中的每个文字lit，将其对应的变量的assumption设为false,并且重置m_assumption
     void context::reset_assumptions() {
         TRACE("unsat_core_bug", tout << "reset " << m_assumptions << "\n";);
         for (literal lit : m_assumptions) 
             get_bdata(lit.var()).m_assumption = false;
         m_assumptions.reset();
     }
-
+    //判断是否需要重新搜索，如果r不是l_false或者unsat_core是空的就不需要（即如果r是l_undf或者l_true就返回false了，不再重新搜索），如果r是l_false并且存在一个理论需要重新搜索就需要
     bool context::should_research(lbool r) {
         if (r != l_false || m_unsat_core.empty()) { 
             return false;
@@ -3330,7 +3407,7 @@ namespace smt {
         }
         return false;
     }
-
+    //构造一个unsat_core (目前不使用)
     lbool context::mk_unsat_core(lbool r) {        
         if (r != l_false) return r;
         SASSERT(inconsistent());
@@ -3355,7 +3432,7 @@ namespace smt {
             }
         }
         reset_assumptions();
-        pop_to_base_lvl(); // undo the push_scope() performed by init_assumptions
+        pop_to_base_lvl(); // undo the push_scope() performed by init_assumptions 取消由init_assumption执行的push_scope操作
         m_search_lvl = m_base_lvl;
         std::sort(m_unsat_core.c_ptr(), m_unsat_core.c_ptr() + m_unsat_core.size(), ast_lt_proc());
         TRACE("unsat_core_bug", tout << "unsat core:\n" << m_unsat_core << "\n";);
@@ -3373,6 +3450,7 @@ namespace smt {
     /**
        \brief Make some checks before starting the search.
        Return true if succeeded.
+       在开始搜索之前进行一些检测，如果检测成功返回true
     */
     bool context::check_preamble(bool reset_cancel) {
         if (m.has_trace_stream() && !m_is_auxiliary)
@@ -3392,6 +3470,7 @@ namespace smt {
 
     /**
        \brief Execute some finalization code after performing the search.
+       在执行完搜索之后执行的一些终结代码
     */
     lbool context::check_finalize(lbool r) {
         TRACE("after_search", display(tout << "result: " << r << "\n");
@@ -3404,7 +3483,7 @@ namespace smt {
         if (r == l_true && gparams::get_value("model_validate") == "true") {
             recfun::util u(m);
             model_ref mdl;
-            get_model(mdl);            
+            get_model(mdl);//获取求解后的model，对每个理论逐个遍历验证模型的valid            
             if (u.get_rec_funs().empty()) {
                 if (mdl.get()) {
                     for (theory* t : m_theory_set) {
@@ -3486,6 +3565,8 @@ namespace smt {
 
        \remark A logical context can only be configured at scope level 0,
        and before internalizing any formulas.
+       基于当前的已断言的公式来设置逻辑context，并且执行check命令
+       逻辑context只能在scope 0级 并且 在internalizing任何公式之前 才能被配置
     */
     lbool context::setup_and_check(bool reset_cancel) {
         if (!check_preamble(reset_cancel)) return l_undef;
@@ -3502,16 +3583,16 @@ namespace smt {
         internalize_assertions();
         expr_ref_vector theory_assumptions(m);
         add_theory_assumptions(theory_assumptions);
-        if (!theory_assumptions.empty()) {
+        if (!theory_assumptions.empty()) {//理论assumption不为空
             TRACE("search", tout << "Adding theory assumptions to context" << std::endl;);
             return check(0, nullptr, reset_cancel);
         }
-        else {
+        else {//如果理论assumption为空
             TRACE("before_search", display(tout););
             return check_finalize(search());
         }
     }
-
+    //根据参数use_static_features来返回不同的config模式
     config_mode context::get_config_mode(bool use_static_features) const {
         if (!m_fparams.m_auto_config)
             return CFG_BASIC;
@@ -3519,9 +3600,9 @@ namespace smt {
             return CFG_AUTO;
         return CFG_LOGIC;
     }
-
+    //设置context，参数是是否是否使用静态特征，
     void context::setup_context(bool use_static_features) {
-        if (m_setup.already_configured() || inconsistent()) {
+        if (m_setup.already_configured() || inconsistent()) {//如果已经设置了m_setup的设定，则设定relevancy_lvl如下
             m_relevancy_lvl = std::min(m_fparams.m_relevancy_lvl, m_relevancy_lvl);
             return;
         }
@@ -3539,24 +3620,24 @@ namespace smt {
         if (!relevancy())
             m_fparams.m_relevancy_lemma = false;
 
-        // setup all the theories
+        // setup all the theories 设置所有的理论
         for (theory* th : m_theory_set) 
             th->setup();
     }
-
+    //添加一系列的理论假设，逐个遍历理论集合中的理论，向其中加入理论assumption，在check中被调用
     void context::add_theory_assumptions(expr_ref_vector & theory_assumptions) {
         for (theory* th : m_theory_set) {
             th->add_theory_assumptions(theory_assumptions);
         }
     }
-
+    //check的重载，加入并行处理
     lbool context::check(unsigned num_assumptions, expr * const * assumptions, bool reset_cancel) {
         if (!check_preamble(reset_cancel)) return l_undef;
         SASSERT(at_base_level());
         setup_context(false);
         if (m_fparams.m_threads > 1 && !m.has_trace_stream()) {            
             expr_ref_vector asms(m, num_assumptions, assumptions);
-            parallel p(*this);
+            parallel p(*this);//并行
             return p(asms);
         }
         lbool r;
@@ -3575,29 +3656,29 @@ namespace smt {
         r = check_finalize(r);
         return r;
     }
-
+    //入口函数，调用search检测
     lbool context::check(expr_ref_vector const& cube, vector<expr_ref_vector> const& clauses) {
         if (!check_preamble(true)) return l_undef;
         TRACE("before_search", display(tout););
         setup_context(false);
         lbool r;
         do {
-            pop_to_base_lvl();
+            pop_to_base_lvl();//回退到base层
             expr_ref_vector asms(cube);
             internalize_assertions();
-            add_theory_assumptions(asms);
-            // introducing proxies: if (!validate_assumptions(asms)) return l_undef;
+            add_theory_assumptions(asms);//添加一系列的cube中的理论假设
+            // introducing proxies: if (!validate_assumptions(asms)) return l_undef; 引入代理：如果clauses子句集中的子句不是valid，则返回undef
             for (auto const& clause : clauses) if (!validate_assumptions(clause)) return l_undef;
-            init_assumptions(asms);
-            for (auto const& clause : clauses) init_clause(clause);
-            r = search();   
+            init_assumptions(asms);//初始化assumption
+            for (auto const& clause : clauses) init_clause(clause);//对于每个子句逐个
+            r = search();  //进行搜索 
             r = mk_unsat_core(r);             
         }
         while (should_research(r));
         r = check_finalize(r);
         return r;           
     }
-
+    //初始化搜索，初始化一系列的参数，可以在此处调整参数设置!!!
     void context::init_search() {
         for (theory* th : m_theory_set) {
             th->init_search_eh();
@@ -3627,7 +3708,7 @@ namespace smt {
     void context::end_search() {
         m_case_split_queue->end_search_eh();
     }
-
+    //该方法在restart中被调用，根据重启策略调整增加重启阈值
     void context::inc_limits() {
         if (m_num_conflicts_since_restart >= m_restart_threshold) {
             switch (m_fparams.m_restart_strategy) {
@@ -3657,13 +3738,13 @@ namespace smt {
         m_num_conflicts_since_restart = 0;
     }
 
-
+    //搜索过程，调用核心部分bounded_search
     lbool context::search() {
         if (m_asserted_formulas.inconsistent()) {
-            asserted_inconsistent();
+            asserted_inconsistent();//如果断言的公式已经是不一致的了，直接返回l_false，先获取断言的公式的不一致证明作为unsat证明，然后设置冲突
             return l_false;
         }
-        if (inconsistent()) {
+        if (inconsistent()) {//如果已经不一致
             VERIFY(!resolve_conflict());
             return l_false;
         }
@@ -3674,7 +3755,7 @@ namespace smt {
         SASSERT(at_search_level());
         TRACE("search", display(tout); display_enodes_lbls(tout););
         TRACE("search_detail", m_asserted_formulas.display(tout););
-        init_search();
+        init_search();//初始化搜索
         flet<bool> l(m_searching, true);
         TRACE("after_init_search", display(tout););
         IF_VERBOSE(2, verbose_stream() << "(smt.searching)\n";);
@@ -3685,12 +3766,12 @@ namespace smt {
         while (true) {
             SASSERT(!inconsistent());
 
-            status = bounded_search();
+            status = bounded_search();//受限搜索
             TRACE("search_bug", tout << "status: " << status << ", inconsistent: " << inconsistent() << "\n";);
             TRACE("assigned_literals_per_lvl", display_num_assigned_literals_per_lvl(tout);
                   tout << ", num_assigned: " << m_assigned_literals.size() << "\n";);
 
-            if (!restart(status, curr_lvl)) {
+            if (!restart(status, curr_lvl)) {//如果受限搜索结束了就调用重启
                 break;
             }            
         }
@@ -3702,7 +3783,7 @@ namespace smt {
         end_search();
         return status;
     }
-
+    //重启
     bool context::restart(lbool& status, unsigned curr_lvl) {
         SASSERT(status != l_true || !inconsistent());
 
@@ -3718,7 +3799,7 @@ namespace smt {
             return false;
         }
         if (status == l_true && m_qmanager->has_quantifiers()) {
-            // possible outcomes   DONE l_true, DONE l_undef, CONTINUE
+            // possible outcomes   DONE l_true, DONE l_undef, CONTINUE 可能的结果，DONE true，undef，CONTINUE
             mk_proto_model();
             quantifier_manager::check_model_result cmr = quantifier_manager::UNKNOWN;
             if (m_proto_model.get()) {
@@ -3774,7 +3855,7 @@ namespace smt {
         status = l_undef;
         return true;
     }
-
+    //将counter加一，如果counter超过上限则重置,在bounded search中计数遇到冲突的次数
     void context::tick(unsigned & counter) const {
         counter++;
         if (counter > m_fparams.m_tick) {
@@ -3788,14 +3869,14 @@ namespace smt {
             counter = 0;
         }
     }
-
+    //受限搜索，这是搜索部分的核心代码!!!
     lbool context::bounded_search() {
         unsigned counter = 0;
 
         TRACE("bounded_search", tout << "starting bounded search...\n";);
 
         while (true) {
-            while (!propagate()) {
+            while (!propagate()) {//当还不需要用decide操作，并且尚未超出资源
                 TRACE_CODE({
                     static bool first_propagate = true;
                     if (first_propagate) {
@@ -3803,56 +3884,56 @@ namespace smt {
                         TRACE("after_first_propagate", display(tout););
                     }
                 });
+                //此处在做归结操作，学习子句，回溯
+                tick(counter);//将counter加一，如果超过上限就重置counter，并且打印搜索信息
 
-                tick(counter);
-
-                if (!resolve_conflict())
+                if (!resolve_conflict())//归结冲突返回false说明当前的公式不可满足
                     return l_false;
 
-                SASSERT(m_scope_lvl >= m_base_lvl);
+                SASSERT(m_scope_lvl >= m_base_lvl);//要保证决策层>=base层
 
-                if (!inconsistent()) {
-                    if (resource_limits_exceeded())
+                if (!inconsistent()) {//如果目前还是一致的，并且满足如下情况，则返回搜索状态为unknown
+                    if (resource_limits_exceeded())//资源超出
                         return l_undef;
 
-                    if (get_cancel_flag())
+                    if (get_cancel_flag())//被取消
                         return l_undef;
 
                     if (m_num_conflicts_since_restart > m_restart_threshold && m_scope_lvl - m_base_lvl > 2) {
                         TRACE("search_bug", tout << "bounded-search return undef, inconsistent: " << inconsistent() << "\n";);
-                        return l_undef; // restart
+                        return l_undef; // restart 如果在一次重启之后的冲突数大于阈值 并且 决策层大于base层+2
                     }
 
                     if (m_num_conflicts > m_fparams.m_max_conflicts) {
                         TRACE("search_bug", tout << "bounded-search return undef, inconsistent: " << inconsistent() << "\n";);
                         m_last_search_failure = NUM_CONFLICTS;
-                        return l_undef;
+                        return l_undef;//如果总冲突数大于上限，返回undef
                     }
                 }
 
                 if (m_num_conflicts_since_lemma_gc > m_lemma_gc_threshold &&
                     (m_fparams.m_lemma_gc_strategy == LGC_FIXED || m_fparams.m_lemma_gc_strategy == LGC_GEOMETRIC)) {
-                    del_inactive_lemmas();
+                    del_inactive_lemmas();//删除一些活跃度低的lemma
                 }
 
-                m_dyn_ack_manager.propagate_eh();
+                m_dyn_ack_manager.propagate_eh();//动态acker归结
                 CASSERT("dyn_ack", check_clauses(m_lemmas) && check_clauses(m_aux_clauses));
             }
-
+            //跳出传播的原因有2个：需要decide； 资源耗尽，需要返回unknown
             if (resource_limits_exceeded() && !inconsistent()) {
-                return l_undef;
+                return l_undef;//如果资源耗尽并且还一致，则返回unknown
             }
 
             if (get_cancel_flag())
-                return l_undef;
+                return l_undef;//被取消了，返回unknown
 
             if (m_base_lvl == m_scope_lvl && m_fparams.m_simplify_clauses)
-                simplify_clauses();
-
-            if (!decide()) {
-                if (inconsistent()) 
+                simplify_clauses();//如果在最底层才能化简子句
+            //进入decide
+            if (!decide()) {//进行决策操作，如果没有case_split可以操作，则判断是否已经不可满足或者已经可满足或者要放弃
+                if (inconsistent()) //如果没有可以case_split时是不一致的说明是不可满足的，因为已经是完整赋值了
                     return l_false;
-                final_check_status fcs = final_check();
+                final_check_status fcs = final_check();//目前已经是完整赋值，需要进行最终检测
                 TRACE("final_check_result", tout << "fcs: " << fcs << " last_search_failure: " << m_last_search_failure << "\n";);
                 switch (fcs) {
                 case FC_DONE:
@@ -3865,16 +3946,16 @@ namespace smt {
                 }
             }
 
-            if (resource_limits_exceeded() && !inconsistent()) {
+            if (resource_limits_exceeded() && !inconsistent()) {//在decide完成之后还需要检测是否是在一致的情况下的资源耗尽，如果是的话需要返回unknown
                 return l_undef;
             }
         }
     }
-
+    //判断是否已经资源用尽
     bool context::resource_limits_exceeded() {
         if (m_searching) {
             // Some of the flags only make sense to check when searching.
-            // For example, the timer is only started in init_search().
+            // For example, the timer is only started in init_search(). 某些flag只在搜索的时候有意义，例如timer(计时器)只在init_search时开始
             if (m_last_search_failure != OK)
                 return true;
 
@@ -3883,8 +3964,8 @@ namespace smt {
                 return true;
             }
 
-            if (m_progress_callback) {
-                m_progress_callback->fast_progress_sample();
+            if (m_progress_callback) {//如果使用进程回调
+                m_progress_callback->fast_progress_sample();//调用进程回调函数判断是否资源超出
                 if (m_fparams.m_progress_sampling_freq > 0 && m_timer.ms_timeout(m_next_progress_sample + 1)) {
                     m_progress_callback->slow_progress_sample();
                     m_next_progress_sample = (unsigned)(m_timer.get_seconds() * 1000) + m_fparams.m_progress_sampling_freq;
@@ -3892,19 +3973,19 @@ namespace smt {
             }
         }
 
-        if (get_cancel_flag()) {
+        if (get_cancel_flag()) {//搜索被取消了
             m_last_search_failure = CANCELED;
             return true;
         }
 
-        if (memory::above_high_watermark()) {
+        if (memory::above_high_watermark()) {//如果使用的内存量已经超过内存水位，则返回内存超出的失败
             m_last_search_failure = MEMOUT;
             return true;
         }
 
         return false;
     }
-
+    //在完整赋值状态下进行最终检测，相当于检测理论是否可以满足
     final_check_status context::final_check() {
         TRACE("final_check", tout << "final_check inconsistent: " << inconsistent() << "\n"; display(tout); display_normalized_enodes(tout););
         CASSERT("relevancy", check_relevancy());
@@ -3926,59 +4007,59 @@ namespace smt {
         m_incomplete_theories.reset();
 
         unsigned old_idx          = m_final_check_idx;
-        unsigned num_th           = m_theory_set.size();
+        unsigned num_th           = m_theory_set.size();//理论的个数
         unsigned range            = num_th + 1;
         final_check_status result = FC_DONE;
         failure  f                = OK;
 
         do {
             TRACE("final_check_step", tout << "processing: " << m_final_check_idx << ", result: " << result << "\n";);
-            final_check_status ok;
-            if (m_final_check_idx < num_th) {
+            final_check_status ok;//ok是最终检测的状态
+            if (m_final_check_idx < num_th) {//检测的是理论，此时check_idx指向的是理论
                 theory * th = m_theory_set[m_final_check_idx];
                 IF_VERBOSE(100, verbose_stream() << "(smt.final-check \"" << th->get_name() << "\")\n";);
-                ok = th->final_check_eh();
+                ok = th->final_check_eh();//理论的最终检测
                 TRACE("final_check_step", tout << "final check '" << th->get_name() << " ok: " << ok << " inconsistent " << inconsistent() << "\n";);
-                if (ok == FC_GIVEUP) {
+                if (ok == FC_GIVEUP) {//如果理论检测的结果是放弃，则失败的是理论
                     f  = THEORY;
-                    m_incomplete_theories.push_back(th);
+                    m_incomplete_theories.push_back(th);//将该理论加入不完整理论
                 }
             }
-            else {
+            else {//检测的是量词
                 ok = m_qmanager->final_check_eh(true);
                 TRACE("final_check_step", tout << "quantifier  ok: " << ok << " " << "inconsistent " << inconsistent() << "\n";);
             }
 
-            m_final_check_idx = (m_final_check_idx + 1) % range;
+            m_final_check_idx = (m_final_check_idx + 1) % range;//循环计数
             // IF_VERBOSE(1000, verbose_stream() << "final check status: " << ok << "\n";);
 
             switch (ok) {
-            case FC_DONE:
+            case FC_DONE://如果是done则什么都不做
                 break;
             case FC_GIVEUP:
-                result = FC_GIVEUP;
+                result = FC_GIVEUP;//如果是giveup则记录在result中
                 break;
             case FC_CONTINUE:
-                return FC_CONTINUE;
+                return FC_CONTINUE;//如果是continue则直接返回
                 break;
             }
         }
-        while (m_final_check_idx != old_idx);
+        while (m_final_check_idx != old_idx);//直到把所有理论都扫一遍
 
         TRACE("final_check_step", tout << "result: " << result << "\n";);
 
-        if (can_propagate()) {
+        if (can_propagate()) {//如果尚且可以传播，则返回最终检测状态是continue
             TRACE("final_check_step", tout << "can propagate: continue...\n";);
             return FC_CONTINUE;
         }
 
         SASSERT(result != FC_DONE || check_th_diseq_propagation());
         TRACE("final_check_step", tout << "RESULT final_check: " << result << "\n";);
-        if (result == FC_GIVEUP && f != OK)
+        if (result == FC_GIVEUP && f != OK)//如果结果是giveup并且f不是OK，说明是在理论检测时得到的giveup，则要把失败的原因归为f，即理论
             m_last_search_failure = f;
         return result;
     }
-
+    //检测proof，调用proof_checker.check
     void context::check_proof(proof * pr) {
         if (m.proofs_enabled() && m_fparams.m_check_proof) {
             proof_checker pf(m);
@@ -3986,7 +4067,7 @@ namespace smt {
             pf.check(pr, side_conditions);
         }
     }
-
+    //遗忘当前层的变量的phase，在冲突归结中被调用，将本层赋值的所有文字的phase都设为不可available，即不可获取其值
     void context::forget_phase_of_vars_in_current_level() {
         unsigned head = m_scope_lvl == 0 ? 0 : m_scopes[m_scope_lvl - 1].m_assigned_literals_lim;
         unsigned sz   = m_assigned_literals.size();
@@ -3994,11 +4075,11 @@ namespace smt {
             literal l  = m_assigned_literals[i];
             bool_var v = l.var();
             TRACE("forget_phase", tout << "forgetting phase of l: " << l << "\n";);
-            m_bdata[v].m_phase_available = false;
+            m_bdata[v].m_phase_available = false;//将上一层的已赋值文字到所有已赋值文字之间的所有文字，它们的phase_available设为false，即不可以获取其phase
         }
     }
 
-
+//冲突归结，核心部分!!!
     bool context::resolve_conflict() {
         m_stats.m_num_conflicts++;
         m_num_conflicts ++;
@@ -4015,15 +4096,15 @@ namespace smt {
         if (m_fparams.m_phase_selection == PS_THEORY || 
             m_fparams.m_phase_selection == PS_CACHING_CONSERVATIVE || 
             m_fparams.m_phase_selection == PS_CACHING_CONSERVATIVE2)
-            forget_phase_of_vars_in_current_level();
+            forget_phase_of_vars_in_current_level();//如果选择phase的策略是如上3种，则需要遗忘本层中的phase，即本层的phase不可available
         m_atom_propagation_queue.reset();
         m_eq_propagation_queue.reset();
         m_th_eq_propagation_queue.reset();
         m_th_diseq_propagation_queue.reset();
         if (m_conflict_resolution->resolve(m_conflict, m_not_l)) {
             unsigned new_lvl = m_conflict_resolution->get_new_scope_lvl();
-            unsigned num_lits = m_conflict_resolution->get_lemma_num_literals();
-            literal * lits    = m_conflict_resolution->get_lemma_literals();
+            unsigned num_lits = m_conflict_resolution->get_lemma_num_literals();//num_lits是lemma中的文字数量
+            literal * lits    = m_conflict_resolution->get_lemma_literals();//lits中存放的是lemma中的文字
 
             SASSERT(num_lits > 0);
             unsigned conflict_lvl = get_assign_level(lits[0]);
@@ -4035,6 +4116,9 @@ namespace smt {
             // be recreated. If that is the case, I store the assertions in
             // a special vector and keep reasserting whenever I backtrack.
             // Moreover, I backtrack only one level.
+            //当文字数为1，则默认行为是回退到base层，如果问题中带有量词，则做该操作可能会很昂贵。
+            //如果那样的话，我将断言存在一个特殊数组中，并且每当回退时都重新断言。
+            //此外，只回退一层
             bool delay_forced_restart =
                 m_fparams.m_delay_units &&
                 internalized_quantifiers() &&
@@ -4051,6 +4135,8 @@ namespace smt {
             // backtracking, and will need to be recreated. However, I want to keep
             // the generation number for enodes that are going to be recreated. See
             // comment in cache_generation(unsigned).
+            //冲突子句中的一些文字或enode会在回退的过程中被破坏，并且需要被重新创造
+            //但是，又想要在它们将要被重新构造时，保持enode的生成号。
             if (m_conflict_resolution->get_lemma_intern_lvl() > new_lvl)
                 cache_generation(num_lits, lits, new_lvl);
 
@@ -4070,7 +4156,7 @@ namespace smt {
                 m.trace_stream() << "[conflict] ";
                 display_literals(m.trace_stream(), num_lits, lits);
                 m.trace_stream() << "\n";
-            }
+            }//一些打印信息
 
 #ifdef Z3DEBUG
             expr_ref_vector expr_lits(m);
@@ -4086,7 +4172,7 @@ namespace smt {
             }
 #endif
             proof * pr = nullptr;
-            if (m.proofs_enabled()) {
+            if (m.proofs_enabled()) {//如果使用了proof，则需要获取lemma的证明
                 pr = m_conflict_resolution->get_lemma_proof();
                 // check_proof(pr);
                 TRACE("context_proof", tout << mk_ll_pp(pr, m););
@@ -4097,12 +4183,14 @@ namespace smt {
             // I invoke pop_scope_core instead of pop_scope because I don't want
             // to reset cached generations... I need them to rebuild the literals
             // of the new conflict clause.
+            //调用了pop_scope_core而不是pop_scope，因为我不想重置cached generations，在重建新冲突子句时需要它们
             if (relevancy()) record_relevancy(num_lits, lits);
-            unsigned num_bool_vars = pop_scope_core(m_scope_lvl - new_lvl);
+            unsigned num_bool_vars = pop_scope_core(m_scope_lvl - new_lvl);//回退到new_lvl层
             SASSERT(m_scope_lvl == new_lvl);
             // the logical context may still be in conflict after
             // clauses are reinitialized in pop_scope.
-            if (m_conflict_resolution->get_lemma_intern_lvl() > m_scope_lvl) {
+            //子句在pop_scope被重新初始化之后，逻辑context可能还是冲突的
+            if (m_conflict_resolution->get_lemma_intern_lvl() > m_scope_lvl) {//如果冲突归结的lemma层大于当前层
                 expr * * atoms         = m_conflict_resolution->get_lemma_atoms();
                 for (unsigned i = 0; i < num_lits; i++) {
                     literal l   = lits[i];
@@ -4111,10 +4199,13 @@ namespace smt {
                         // Remark: atom may be a negative literal (not a). Z3 creates Boolean variables for not-gates that
                         // are nested in terms. Example: let f be a uninterpreted function from Bool -> Int.
                         // Then, given the term (f (not a)), Z3 will create a boolean variable for (not a) when internalizing (f (not a)).
+                        //该布尔变量在回退过程中被删除了，因此它需要重新被构造
+                        //注意：原子可能是一个负文字(not a)。Z3为嵌套在term中的非门创建布尔变量，例如：假设f是一个未解释函数bool->Int
+                        //则给定term f((not a))，当中间化该term，Z3会为(not a)创造一个布尔变量
                         expr * atom     = atoms[i];
                         internalize(atom, true);
-                        // If atom is actually a negative literal (not a), then get_bool_var will return return null_bool_var.
-                        // Thus, we must use get_literal instead. This was a bug/crash in Z3 <= 4.0
+                        // If atom is actually a negative literal (not a), then get_bool_var will return return null_bool_var.如果atom是一个负文字，则get_bool_var会返回一个空布尔变量
+                        // Thus, we must use get_literal instead. This was a bug/crash in Z3 <= 4.0 因此 需要使用get_literal
                         literal new_l = get_literal(atom);
                         if (l.sign())
                             new_l.neg();
@@ -4125,12 +4216,12 @@ namespace smt {
                         // SASSERT(v != null_bool_var);
                         // literal new_l   = literal(v, l.sign());
                         // END BUGGY VERSION
-                        lits[i]         = new_l;
+                        lits[i]         = new_l;//更正lits中的文字
                     }
                 }
             }
             if (relevancy()) restore_relevancy(num_lits, lits);
-            // Resetting the cache manually because I did not invoke pop_scope, but pop_scope_core
+            // Resetting the cache manually because I did not invoke pop_scope, but pop_scope_core 需要手动重置cache，因为没有使用pop_scope
             reset_cache_generation();
             TRACE("resolve_conflict_bug",
                   tout << "AFTER m_scope_lvl: " << m_scope_lvl << ", new_lvl: " << new_lvl << ", lemma_intern_lvl: " <<
@@ -4191,7 +4282,7 @@ namespace smt {
                 TRACE("reassert_units", tout << "asserting #" << unit->get_id() << " " << unit_sign << " @ " << m_scope_lvl << "\n";);
             }
 
-            m_conflict_resolution->release_lemma_atoms();
+            m_conflict_resolution->release_lemma_atoms();//释放lemma中的原子，即重置lemma
             TRACE("context_lemma", tout << "new lemma: ";
                   literal_vector v(num_lits, lits);
                   std::sort(v.begin(), v.end());
@@ -4207,13 +4298,13 @@ namespace smt {
             return true;
         }
         else if (m_fparams.m_clause_proof && !m.proofs_enabled()) {
-            m_unsat_proof = m_clause_proof.get_proof(inconsistent());
+            m_unsat_proof = m_clause_proof.get_proof(inconsistent());//否则归结之后显示当前公式是不可满足的，并且不使用proof
         }
-        else if (m.proofs_enabled()) {
+        else if (m.proofs_enabled()) {//如果需要记录下不可满足的证明，则将lemma作为不可满足的原因记录在unsat_proof中
             m_unsat_proof = m_conflict_resolution->get_lemma_proof();
             check_proof(m_unsat_proof);
         }
-        return false;
+        return false;//归结之后说明原公式不可满足，即冲突归结失败
     }
 
     /*
@@ -4222,6 +4313,9 @@ namespace smt {
       conflict resolution. In this case, the literal is no longer marked as relevant after
       the pop. This can cause quantifier instantiation to miss relevant triggers and thereby
       cause incompleteness.
+      我们记录并恢复 冲突子句中文字 的相关信息
+      在冲突归结期间弹出的scope内，文字可能已被标记为相关。
+      这个可能会导致量词实例化错过 相关性引发器，并因此导致不一致性
      */
     void context::record_relevancy(unsigned n, literal const* lits) {
         m_relevant_conflict_literals.reset();
@@ -4229,7 +4323,7 @@ namespace smt {
             m_relevant_conflict_literals.push_back(is_relevant(lits[i]));
         }
     }
-
+    //恢复相关性
     void context::restore_relevancy(unsigned n, literal const* lits) {
         for (unsigned i = 0; i < n; ++i) {
             if (m_relevant_conflict_literals[i] && !is_relevant(lits[i])) {
@@ -4237,7 +4331,7 @@ namespace smt {
             }
         }
     }
-
+    //获取relevant文字的标签，记录在result中
     void context::get_relevant_labels(expr* cnstr, buffer<symbol> & result) {
         if (m_fparams.m_check_at_labels) {
             check_at_labels checker(m);
@@ -4269,6 +4363,8 @@ namespace smt {
        \brief Collect relevant literals that may be used to block the current assignment.
        If at_lbls is true, then only labels that contains '@' are considered. (This is a hack for Boogie).
        This hack is also available in the Simplify theorem prover.
+       收集可能被用来block当前赋值的relevant文字
+       如果at_lbls是true，则只有包含@的标签会被考虑，这个技巧也可以在化简定理证明器中找到。
     */
     void context::get_relevant_labeled_literals(bool at_lbls, expr_ref_vector & result) {
         SASSERT(!inconsistent());
@@ -4279,7 +4375,7 @@ namespace smt {
                 if (m.is_label_lit(curr, lbls)) {
                     bool include = false;
                     if (at_lbls) {
-                        // include if there is a label with the '@' sign.
+                        // include if there is a label with the '@' sign. 如果存在一个标记带有@符号，则会被包含
                         for (symbol const& s : lbls) {
                             if (s.contains('@')) {
                                 include = true;
@@ -4300,6 +4396,7 @@ namespace smt {
     /**
        \brief Store in result the (relevant) literal assigned by the
        logical context.
+       将逻辑context赋值的（相关）文字存储在结果中。（注意此处只记录了relevant文字）
     */
     void context::get_relevant_literals(expr_ref_vector & result) {
         SASSERT(!inconsistent());
@@ -4323,27 +4420,29 @@ namespace smt {
 
     /**
        \brief Store the current set of guessed literals (i.e., case splits).
+       存储猜测文字的当前集合在reuslt中（即case split文字，也就是guessed的文字）
     */
     void context::get_guessed_literals(expr_ref_vector & result) {
-        // The literals between [m_base_lvl, m_search_lvl) are not guesses but assumptions.
+        // The literals between [m_base_lvl, m_search_lvl) are not guesses but assumptions.在[m_base_lvl,m_search_lvl)之间层的文字不是guess但是是假设
         SASSERT(m_base_lvl <= m_scopes.size());
         if (m_search_lvl == m_scopes.size()) {
             // do nothing... there are guesses...
         }
         for (unsigned i = m_search_lvl; i < m_scope_lvl; i++) {
-            // This method assumes the first literal assigned in a non base scope level is a guess.
+            // This method assumes the first literal assigned in a non base scope level is a guess. 该方法的前提假设是在一个非base层被赋值的第一个文字是一个guess
             scope & s          = m_scopes[i];
             unsigned guess_idx = s.m_assigned_literals_lim;
             literal guess      = m_assigned_literals[guess_idx];
             SASSERT(get_justification(guess.var()).get_kind() == b_justification::AXIOM);
             expr_ref lit(m);
             literal2expr(guess, lit);
-            result.push_back(std::move(lit));
+            result.push_back(std::move(lit));//将guess的文字存在result中
         }
     }
 
     /**
        \brief Undo object for bool var m_true_first field update.
+       撤销bool变量m_true_first字段更新的对象
     */
     class set_true_first_trail : public trail<context> {
         bool_var m_var;
@@ -4353,16 +4452,16 @@ namespace smt {
             ctx.m_bdata[m_var].reset_true_first_flag();
         }
     };
-
+    //设置变量v的m_true_first为真
     void context::set_true_first_flag(bool_var v) {
         push_trail(set_true_first_trail(v));
         bool_var_data & d = m_bdata[v];
         d.set_true_first_flag();
     }
-
+    //假设等式lhs和rhs是相等的
     bool context::assume_eq(enode * lhs, enode * rhs) {
         if (lhs->get_root() == rhs->get_root())
-            return false; // it is not necessary to assume the eq.
+            return false; // it is not necessary to assume the eq. 如果lhs和rhs的根相同，则不必要假定等式
         expr * _lhs = lhs->get_owner();
         expr * _rhs = rhs->get_owner();
         expr * eq = mk_eq_atom(_lhs, _rhs);
@@ -4379,6 +4478,8 @@ namespace smt {
             //  (<= (- x y) 0)
             //  (>= (- y x) 0)
             // for the new equality atom (= x y).
+            //不会调用internalize，因为想要在调用理论的internalize_eq_eh之前就先标记try_true_first
+            //原因是：像算术之类的理论应该知道try_true_first是否已经被标记为真了。它们会使用这一信息来为新的等价原子标记如下辅助原子
             if (m.is_eq(eq)) {
                 internalize_formula_core(to_app(eq), true);
                 bool_var v        = get_bool_var(eq);
@@ -4417,7 +4518,7 @@ namespace smt {
         TRACE("assume_eq", tout << "assume_eq result: " << r << "\n";);
         return r;
     }
-
+    //判断一个enode n是否是被共享的，如果n的等价类包含一个父应用，则该变量是被共享的
     bool context::is_shared(enode * n) const {
         n = n->get_root();
         unsigned num_th_vars = n->get_num_th_vars();
@@ -4435,6 +4536,7 @@ namespace smt {
 
             // the variable is shared if the equivalence class of n
             // contains a parent application.
+            // 如果n的等价类包含一个父应用，则该变量是被共享的
 
             theory_var_list * l = n->get_th_var_list();
             theory_id th_id     = l->get_id();
@@ -4454,7 +4556,7 @@ namespace smt {
             // Arrays and Tuples.  For example, array theory is a
             // parametric theory, that is, it implements several theories:
             // (array int int), (array int (array int int)), ...
-            //
+            //一些理论实现了理论类，例如：Array和Tuples，例如，数组理论是一个带参数的理论，即它实现了一些理论（数组 整数 整数）。。。
             // Example:
             //
             // a : (array int int)
@@ -4475,14 +4577,14 @@ namespace smt {
             // In the example above, 'a' and 'b' are shared variables between
             // the theories of (array int int) and (array (array int int) int).
             // Remark: The inconsistency is not going to be detected if they are
-            // not marked as shared.
+            // not marked as shared.在例子中，'a'和‘b'是两个理论的共享变量，如果他们不被标记为共享的话，不一致是不会被检测到的
             return get_theory(th_id)->is_shared(l->get_var());
         }
         default:
             return true;
         }
     }
-
+    //获得enode n在相应的理论中的value
     bool context::get_value(enode * n, expr_ref & value) {
         sort * s      = m.get_sort(n->get_owner());
         family_id fid = s->get_family_id();
@@ -4491,7 +4593,7 @@ namespace smt {
             return false;
         return th->get_value(n, value);
     }
-
+    //更新model，首先final_check一下，如果理论检测成功，则重置模型
     bool context::update_model(bool refinalize) {
         final_check_status fcs = FC_DONE;
         if (refinalize) {
@@ -4531,15 +4633,15 @@ namespace smt {
             IF_VERBOSE(11, model_pp(verbose_stream(), *m_proto_model););
         }
     }
-
+    //获取unsat的proof
     proof * context::get_proof() {        
         if (!m_unsat_proof) {
-            m_unsat_proof = m_clause_proof.get_proof(inconsistent());
+            m_unsat_proof = m_clause_proof.get_proof(inconsistent());//如果没有unsat_proof，就调用子句中获取不一致proof函数
         }
         TRACE("context", tout << m_unsat_proof << "\n";);
         return m_unsat_proof;
     }
-
+    //逐个考虑所有internalized的数量，如果i是relevant并且i没有被定义，那么就是有case_splits
     bool context::has_case_splits() {
         for (unsigned i = get_num_b_internalized(); i-- > 0; ) {
             if (is_relevant(i) && get_assignment(i) == l_undef)
@@ -4547,12 +4649,12 @@ namespace smt {
         }
         return false;
     }
-
+//获取model到model ref中，在check_final中被使用
     void context::get_model(model_ref & mdl) {
         if (inconsistent()) 
             mdl = nullptr;
         else if (m_model.get()) 
-            mdl = m_model.get();
+            mdl = m_model.get();//如果m_model.get可以返回值则将其设为mdl
         else if (!m.inc())
             mdl = nullptr;
         else {
@@ -4569,7 +4671,7 @@ namespace smt {
             mdl = m_model.get();
         }
     }
-
+    //遍历所有的变量，将每个变量的赋值层数放在depth数组中，如果变量为null_bool_var，则为其设置为MAX
     void context::get_levels(ptr_vector<expr> const& vars, unsigned_vector& depth) {
         unsigned sz = vars.size(); 
         depth.resize(sz);
@@ -4579,7 +4681,7 @@ namespace smt {
             depth[i] = bv == null_bool_var ? UINT_MAX : get_assign_level(bv);            
         }
     }
-
+    //获取当前部分赋值的迹
     expr_ref_vector context::get_trail() {        
         expr_ref_vector result(get_manager());
         get_assignments(result);
@@ -4589,7 +4691,7 @@ namespace smt {
     failure context::get_last_search_failure() const {
         return m_last_search_failure;
     }
-
+    //向model中加入rec_funs
     void context::add_rec_funs_to_model() {
         if (!m_model) return;
         recfun::util u(m);
@@ -4604,7 +4706,7 @@ namespace smt {
             }			
 
             func_interp* fi = alloc(func_interp, m, f->get_arity());
-            // reverse argument order so that variable 0 starts at the beginning.
+            // reverse argument order so that variable 0 starts at the beginning.反转参数顺序，使变量0从开头开始 
             expr_ref_vector subst(m);
             for (unsigned i = 0; i < f->get_arity(); ++i) {
                 subst.push_back(m.mk_var(i, f->get_domain(i)));

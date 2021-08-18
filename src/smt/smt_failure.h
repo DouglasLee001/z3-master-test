@@ -27,11 +27,11 @@ namespace smt {
         OK,
         UNKNOWN,
         MEMOUT,     
-        CANCELED,      //!< External cancel flag was set
-        NUM_CONFLICTS, //!< Maximum number of conflicts was reached
-        THEORY,        //!< Theory is incomplete
-        RESOURCE_LIMIT,
-        QUANTIFIERS    //!< Logical context contains universal quantifiers.
+        CANCELED,      //!< External cancel flag was set 设置了cancel flag
+        NUM_CONFLICTS, //!< Maximum number of conflicts was reached 到达了最大冲突数
+        THEORY,        //!< Theory is incomplete 理论是不完整的
+        RESOURCE_LIMIT, //资源限制
+        QUANTIFIERS    //!< Logical context contains universal quantifiers. 逻辑context包含通用量词
     };
 
 };

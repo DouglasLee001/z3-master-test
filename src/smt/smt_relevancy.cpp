@@ -449,6 +449,8 @@ namespace smt {
            expressions. That is, expressions that are located at positions
            [m_qhead, m_relevant_exprs.size()) in the stack of 
            relevant expressions.
+           传播最近标记的表达式的参数的相关性。
+           也就是说，位于相关表达式栈中位置[m_qhead, m_relevant_exprs.size())的表达式
         */
         void propagate() override {
             if (m_propagating) {  

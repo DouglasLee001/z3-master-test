@@ -84,6 +84,11 @@ namespace smt {
           
        smt::context notifies the relevancy_propagator that a literal was assigned by
        invoking assign_eh(n, bool val)
+       相关性传播器
+       使用以下方法将相关传播约束指定给相关传播器相关性传播约束：add_handler，add_watch
+       此类还提供用于指定常用约束的辅助方法。
+       它使用从context来的如下API：find_assignment,find_enode
+       通过调用assign_eh来提醒相关传播器，该文字被赋值了
     */
     class relevancy_propagator {
     protected:
@@ -97,6 +102,7 @@ namespace smt {
 
         /**
            \brief Install an event handler that is invoked whenever n is marked as relevant.
+           安装，当n被标记为相关时，调用的事件句柄
         */
         virtual void add_handler(expr * n, relevancy_eh * eh) = 0;
         
@@ -104,6 +110,8 @@ namespace smt {
            \brief Install an event handler that is invoked whenever n is assigned to the given value.
 
            The relevancy propagator is notified of new assignments by the method assign_eh.
+           安装一个事件处理程序，每当n被赋给给定的值时调用它。
+           通过assign_eh方法通知相关传播器新的赋值。
         */
         virtual void add_watch(expr * n, bool val, relevancy_eh * eh) = 0;
 
@@ -111,11 +119,14 @@ namespace smt {
            \brief Install an event handler that just marks target as relevant whenever n is assigned to the given value.
 
            The relevancy propagator is notified of new assignments by the method assign_eh.
+           当表达式n被赋值，安装一个事件句柄，将target标记为相关的
+           通过assign_eh方法通知相关传播器新的赋值。
         */
         virtual void add_watch(expr * n, bool val, expr * target) = 0;
 
         /**
            \brief smt::context invokes this method whenever the expression is assigned to true/false
+           当表达式被赋值为真/假的时候，context调用该方法
         */
         virtual void assign_eh(expr * n, bool val) = 0;
 
@@ -133,6 +144,7 @@ namespace smt {
            \brief Propagate relevancy using the event handlers
            specified by add_handler and add_watch, and the structure
            of the expressions already marked as relevant.
+           使用add_handler和add_watch指定的事件处理程序, 以及已标记为相关的表达式的结构来传播相关性。
         */
         virtual void propagate() = 0;
 

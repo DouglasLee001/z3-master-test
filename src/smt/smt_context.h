@@ -108,7 +108,7 @@ namespace smt {
 
         ptr_vector<justification>   m_justifications;
 
-        unsigned                    m_final_check_idx; // circular counter used for implementing fairness
+        unsigned                    m_final_check_idx; // circular counter used for implementing fairness 用于实现公平的循环计数器
 
         bool                        m_is_auxiliary; // used to prevent unwanted information from being logged.
         class parallel*             m_par;
@@ -123,7 +123,7 @@ namespace smt {
         enode *                     m_false_enode;
         app2enode_t                 m_app2enode;    // app -> enode
         ptr_vector<enode>           m_enodes;
-        plugin_manager<theory>      m_theories;     // mapping from theory_id -> theory
+        plugin_manager<theory>      m_theories;     // mapping from theory_id -> theory 将理论id映射到理论
         ptr_vector<theory>          m_theory_set;   // set of theories for fast traversal
         vector<enode_vector>        m_decl2enodes;  // decl -> enode (for decls with arity > 0)
         enode_vector                m_empty_vector;
@@ -172,17 +172,17 @@ namespace smt {
         unsigned_vector             m_lit_occs;    //!< occurrence count of literals
         svector<bool_var_data>      m_bdata;       //!< mapping bool_var -> data
         svector<double>             m_activity;
-        clause_vector               m_aux_clauses;
-        clause_vector               m_lemmas;
+        clause_vector               m_aux_clauses;//辅助子句
+        clause_vector               m_lemmas;//加入的引理
         vector<clause_vector>       m_clauses_to_reinit;
         expr_ref_vector             m_units_to_reassert;
         svector<char>               m_units_to_reassert_sign;
         literal_vector              m_assigned_literals;
-        typedef std::pair<clause*, literal_vector> tmp_clause;
+        typedef std::pair<clause*, literal_vector> tmp_clause;//tmp_clause是一个子句指针和文字列表的pair
         vector<tmp_clause>          m_tmp_clauses;
-        unsigned                    m_qhead;
-        unsigned                    m_simp_qhead;
-        int                         m_simp_counter; //!< can become negative
+        unsigned                    m_qhead;//指向刚已经赋值的变量，逐个处理
+        unsigned                    m_simp_qhead;//m_simp_qhead用来检测是否会有在底层的新赋值文字
+        int                         m_simp_counter; //!< can become negative 是用来平衡simplify_clause的开销，在执行完simplify_clauses之后，该counter会估计再次执行simplify_clauses的开销，也就是需要被访问的文字数，每次我们在传播时访问一个变量，这个counter的值会下降
         scoped_ptr<case_split_queue> m_case_split_queue;
         scoped_ptr<induction>       m_induction;
         double                      m_bvar_inc;
@@ -195,6 +195,9 @@ namespace smt {
         // justification for l, and the conflict is union of m_not_l and m_conflict;
         // m_empty_clause is set to ensure that an empty clause generated in deep scope 
         // levels survives to the base level.
+        /*
+        一个冲突通常是一个单独的证明，也就是说一个对false的证明，如果m_not_lit不是一个空文字，则m_confict是一个对l的证明，并且冲突是m_not_l和m_conflict的并集
+        */
         b_justification             m_conflict;
         literal                     m_not_l;
         scoped_ptr<conflict_resolution> m_conflict_resolution;
@@ -931,6 +934,8 @@ namespace smt {
          * assigned 'true' at any time.
          * We assume that the theory solver has already asserted the disjunction of these literals
          * or some other axiom that means at least one of them must be assigned 'true'.
+         * 为核心求解器提供一个提示：特定文字形成了一个“理论case split”，核心求解器将会强迫这些文字中恰好只有其中一个文字能被赋值为真
+         * 我们假设：T solver已经断言来这些文字的析取，或者一些其他原子表明这些文字至少有一个必须为真
          */
         void mk_th_case_split(unsigned num_lits, literal * lits);
 
@@ -939,6 +944,8 @@ namespace smt {
          * Provide a hint to the branching heuristic about the priority of a "theory-aware literal".
          * Literals marked in this way will always be branched on before unmarked literals,
          * starting with the literal having the highest priority.
+         * 为branching启发是提供关于“理论意识文字”的属性的提示，以这种形式被标记的文字会总是先于未标记文字被branch
+         * 从带有最高属性的文字开始
          */
         void add_theory_aware_branching_info(bool_var v, double priority, lbool phase);
 
@@ -989,15 +996,16 @@ namespace smt {
         void trace_assign(literal l, b_justification j, bool decision) const;
 
     public:
+    //对一个文字l赋值为真，如果它已经被赋值为假，则产生冲突，如果已经为真则直接返回，如果为定义则赋值为相应的值
         void assign(literal l, const b_justification & j, bool decision = false) {
             SASSERT(l != false_literal);
             SASSERT(l != null_literal);
             switch (get_assignment(l)) {
             case l_false:
-                set_conflict(j, ~l);
+                set_conflict(j, ~l);//如果l本身为false，则设置冲突
                 break;
             case l_undef:
-                assign_core(l, j, decision);
+                assign_core(l, j, decision);//如果l没有被赋值，调用assign_core
                 break;
             case l_true:
                 return;
@@ -1024,19 +1032,23 @@ namespace smt {
         /**
            \brief Force the given phase next time we case split v.
            This method has no effect if phase caching is disabled.
+           下一次对v做case split的时候强迫赋值为指定的值phase，如果没有使用phase caching技术则该方法无效
         */
         void force_phase(bool_var v, bool phase) {
-            bool_var_data & d   = get_bdata(v);
-            d.m_phase_available = true;
-            d.m_phase           = phase;
+            bool_var_data & d   = get_bdata(v);//获得变量v的引用
+            d.m_phase_available = true;//指定其引用是可以获取phase的
+            d.m_phase           = phase;//将该变量设置为相应的phase
         }
 
+        //对指定的文字赋值为相反的值，即把l对应的变量下次指定赋值为相反的取值
         void force_phase(literal l) {
             force_phase(l.var(), !l.sign());
         }
 
+        //返回是否包含该例子，会调用fingerprint中的contain函数
         bool contains_instance(quantifier * q, unsigned num_bindings, enode * const * bindings);
 
+        //添加实例，调用了量词管理m_qmanager的add_instance函数
         bool add_instance(quantifier * q, app * pat, unsigned num_bindings, enode * const * bindings, expr* def, unsigned max_generation,
                           unsigned min_top_generation, unsigned max_top_generation, vector<std::tuple<enode *, enode*>> & used_enodes /*gives the equalities used for the pattern match, see mam.cpp for more info*/);
 
@@ -1076,6 +1088,7 @@ namespace smt {
 
         void restore_theory_vars(enode * r2, enode * r1);
 
+        //添加等式，如果2个enode的根不同，那就说明属于2个不同的等价类，那就将其加入到等价类传播队列中
         void push_eq(enode * lhs, enode * rhs, eq_justification const & js) {
             if (lhs->get_root() != rhs->get_root()) {
                 SASSERT(m.get_sort(lhs->get_owner()) == m.get_sort(rhs->get_owner()));
@@ -1083,6 +1096,7 @@ namespace smt {
             }
         }
 
+        //添加新的一致性
         void push_new_congruence(enode * n1, enode * n2, bool used_commutativity) {
             SASSERT(n1->m_cg == n2);
             // if (is_relevant(n1)) mark_as_relevant(n2);
@@ -1104,7 +1118,7 @@ namespace smt {
             SASSERT(js);
             set_conflict(b_justification(js));
         }
-
+        //返回是否为不一致，如果冲突有值或者假设的公式已经判定为不一致
         bool inconsistent() const {
             return m_conflict != null_b_justification ||
                 m_asserted_formulas.inconsistent();
@@ -1115,7 +1129,7 @@ namespace smt {
         unsigned get_num_conflicts() const {
             return m_num_conflicts;
         }
-
+        //判断两个enode是否相同的依据是判断其根是否相同
         static bool is_eq(enode const * n1, enode const * n2) { return n1->get_root() == n2->get_root(); }
 
         bool is_diseq(enode * n1, enode * n2) const;
@@ -1137,6 +1151,7 @@ namespace smt {
         void rescale_bool_var_activity();
 
     public:
+        //添加bool变量的活跃度
         void inc_bvar_activity(bool_var v) {
             double & act = m_activity[v];
             act += m_bvar_inc;
@@ -1147,7 +1162,7 @@ namespace smt {
         }
 
     protected:
-
+        //降低bool变量的活跃度
         void decay_bvar_activity() {
             m_bvar_inc *= m_fparams.m_inv_decay;
         }
@@ -1160,17 +1175,18 @@ namespace smt {
 
         /**
            \brief Return true if the give clause is justifying some literal.
+           返回指定子句是否正在验证某个文字
         */
         bool is_justifying(clause * cls) const {
             for (unsigned i = 0; i < 2; i++) {
                 b_justification js;
-                js = get_justification((*cls)[i].var());
-                if (js.get_kind() == b_justification::CLAUSE && js.get_clause() == cls)
+                js = get_justification((*cls)[i].var());//js是子句的前2个文字对应的变量的证明
+                if (js.get_kind() == b_justification::CLAUSE && js.get_clause() == cls)//如果js的类型是CLAUSE并且js的子句是cls，则说明证明验证
                     return true;
             }
             return false;
         }
-
+        //判断子句是否可以删除，如果该子句是在reinit栈中则不可删除，如果在被验证也不可删除
         bool can_delete(clause * cls) const {
             if (cls->in_reinit_stack())
                 return false;
@@ -1319,7 +1335,7 @@ namespace smt {
 
         induction& get_induction(); 
 
-        // Retrieve arithmetic values. 
+        // Retrieve arithmetic values. 获得算数值
         bool get_arith_lo(expr* e, rational& lo, bool& strict);
         bool get_arith_up(expr* e, rational& up, bool& strict);
         bool get_arith_value(expr* e, rational& value);
@@ -1334,7 +1350,7 @@ namespace smt {
 
         // -----------------------------------
         //
-        // Pretty Printing
+        // Pretty Printing 打印部分的代码
         //
         // -----------------------------------
     protected:
@@ -1496,7 +1512,7 @@ namespace smt {
 #endif
         // -----------------------------------
         //
-        // Introspection
+        // Introspection 内省
         //
         // -----------------------------------
         unsigned get_lemma_avg_activity() const;
@@ -1505,7 +1521,7 @@ namespace smt {
 
         // -----------------------------------
         //
-        // Auxiliary
+        // Auxiliary 辅助函数
         //
         // -----------------------------------
         void init();
@@ -1581,6 +1597,9 @@ namespace smt {
         /**
            \brief Return a new context containing the same theories and simplifier plugins, but with an empty
            set of assertions.
+           返回一个行的context包含相同的理论和简化的插件，但是其断言部分为空集
+           如果l==0，则该context中的逻辑被用在新的逻辑中
+           如果p==0，则m_params被使用
 
            If l == 0, then the logic of this context is used in the new context.
            If p == 0, then this->m_params is used

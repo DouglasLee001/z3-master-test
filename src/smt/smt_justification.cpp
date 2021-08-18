@@ -44,10 +44,10 @@ namespace smt {
                                                                  justification * js, 
                                                                  unsigned num_lits, 
                                                                  literal const * lits):
-        m_antecedent(js),
+        m_antecedent(js),//将祖先设置为js
         m_num_literals(num_lits) {
         SASSERT(!js || js->in_region());
-        m_literals = new (r) literal[num_lits];
+        m_literals = new (r) literal[num_lits];//将lits中的文字复制到证明中的文字
         memcpy(m_literals, lits, sizeof(literal) * num_lits);
         TRACE("unit_resolution_justification_bug", tout << literal_vector(num_lits, lits) << "\n";);
         SASSERT(m_num_literals > 0);
