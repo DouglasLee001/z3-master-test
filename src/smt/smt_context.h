@@ -99,11 +99,11 @@ namespace smt {
         region                      m_region;
         fingerprint_set             m_fingerprints;
 
-        expr_ref_vector             m_b_internalized_stack; // stack of the boolean expressions already internalized.
+        expr_ref_vector             m_b_internalized_stack; // stack of the boolean expressions already internalized. 已经被中间化的布尔表达式栈,会在mk_bool_var中加入栈中，会在undo_mk_bool_var出栈
         // Remark: boolean expressions can also be internalized as
         // enodes. Examples: boolean expression nested in an
         // uninterpreted function.
-        expr_ref_vector             m_e_internalized_stack; // stack of the expressions already internalized as enodes.
+        expr_ref_vector             m_e_internalized_stack; // stack of the expressions already internalized as enodes. 已经被中间化成为enodes的表示， 注意：布尔表达式也可能被中间化成为enodes，例如被嵌套在未解释函数中的布尔表达式
         quantifier_ref_vector       m_l_internalized_stack;
 
         ptr_vector<justification>   m_justifications;
@@ -175,7 +175,7 @@ namespace smt {
         clause_vector               m_aux_clauses;//辅助子句
         clause_vector               m_lemmas;//加入的引理
         vector<clause_vector>       m_clauses_to_reinit;
-        expr_ref_vector             m_units_to_reassert;
+        expr_ref_vector             m_units_to_reassert;//当lemma中文字数为1，则默认行为是回退到base层，如果问题中带有量词，则做该操作可能会很昂贵。如果那样的话，我将断言存在一个特殊数组中，并且每当回退时都重新断言。此外，只回退一层
         svector<char>               m_units_to_reassert_sign;
         literal_vector              m_assigned_literals;
         typedef std::pair<clause*, literal_vector> tmp_clause;//tmp_clause是一个子句指针和文字列表的pair
@@ -187,8 +187,8 @@ namespace smt {
         scoped_ptr<induction>       m_induction;
         double                      m_bvar_inc;
         bool                        m_phase_cache_on;
-        unsigned                    m_phase_counter; //!< auxiliary variable used to decide when to turn on/off phase caching
-        bool                        m_phase_default; //!< default phase when using phase caching
+        unsigned                    m_phase_counter; //!< auxiliary variable used to decide when to turn on/off phase caching 用来决定合适启用/关闭phase caching的辅助变量
+        bool                        m_phase_default; //!< default phase when using phase caching 当使用phase caching时的默认phase
 
         // A conflict is usually a single justification. That is, a justification
         // for false. If m_not_l is not null_literal, then m_conflict is a
@@ -351,7 +351,7 @@ namespace smt {
             SASSERT(n->is_bool());
             return n == m_false_enode ? false_literal : literal(enode2bool_var(n));
         }
-
+        //返回已经被中间化的布尔表达式的数量
         unsigned get_num_bool_vars() const {
             return m_b_internalized_stack.size();
         }
@@ -624,7 +624,7 @@ namespace smt {
 
         unsigned                    m_scope_lvl;
         unsigned                    m_base_lvl;
-        unsigned                    m_search_lvl; // It is greater than m_base_lvl when assumptions are used.  Otherwise, it is equals to m_base_lvl
+        unsigned                    m_search_lvl; // It is greater than m_base_lvl when assumptions are used.  Otherwise, it is equals to m_base_lvl 如果使用假设，则search_lvl大于base_lvl，否则它等于base_lvl，[base,search)是假设，[search,scope)是guess
         struct scope {
             unsigned                m_assigned_literals_lim;
             unsigned                m_trail_stack_lim;

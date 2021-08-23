@@ -126,7 +126,7 @@ namespace smt {
 
         /**
            \brief smt::context invokes this method whenever the expression is assigned to true/false
-           当表达式被赋值为真/假的时候，context调用该方法
+           当表达式被赋值为真/假的时候，context调用该方法，提醒relevancy_propagator
         */
         virtual void assign_eh(expr * n, bool val) = 0;
 

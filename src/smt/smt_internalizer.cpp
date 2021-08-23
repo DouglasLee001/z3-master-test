@@ -28,6 +28,7 @@ namespace smt {
 
     /**
        \brief Return true if the expression is viewed as a logical gate.
+       如果该表达式被看成是一个逻辑门，则返回true
     */
     static bool is_gate(ast_manager const & m, expr * n) {
         if (is_app(n) && to_app(n)->get_family_id() == m.get_basic_family_id()) {
@@ -48,7 +49,7 @@ namespace smt {
 #define White 0
 #define Grey  1
 #define Black 2
-
+    
     static char get_color(char_vector & tcolors, char_vector & fcolors, expr * n, bool gate_ctx) {
         char_vector & colors = gate_ctx ? tcolors : fcolors;
         if (colors.size() > n->get_id())
@@ -346,6 +347,7 @@ namespace smt {
 
     /**
        \brief Internalize the given expression into the logical context.
+       中间化给定表达式 到逻辑context中，gate_ctx是true表示：表达式在逻辑门的context中
        
        - gate_ctx is true if the expression is in the context of a logical gate.
     */

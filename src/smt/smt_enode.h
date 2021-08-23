@@ -114,6 +114,7 @@ namespace smt {
         /**
            \brief Return true if the enode should be merged with the true (false) enodes when
            the associated boolean variable is assigned to true (false).
+           当关联的布尔变量被指定为true（false）时，如果enode应该与true（false）enodes合并，则返回true。
         */
         bool merge_tf() const {
             return m_merge_tf;

@@ -43,6 +43,14 @@ namespace smt {
        So, I allow justification objects to be allocated in regions and
        in the regular heap. The method in_region() should return true if the object is
        allocated in a region. 
+       伪证明 对象。他们主要用来追踪依赖，当proof generation被使用时，他们被用来构造证明
+
+       使用基于堆栈的策略分配证明对象。
+       但是有一个例外：lemma的justification
+       在scope 层n被创造的lemma即使在n被回溯之后 也可能会保持存活
+       引理被不时运行的GC删除。因此，在scope层n被回溯之后，附加到引理的理由可能仍然有效。
+
+       因此，我允许在区域和常规堆中分配justification对象。如果对象是在一个域中被分配，则in_region要返回true
     */
     class justification {
         unsigned m_mark:1;

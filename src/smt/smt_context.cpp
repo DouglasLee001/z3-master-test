@@ -115,13 +115,13 @@ namespace smt {
 
     /**
        \brief retrieve flag for when cancelation is possible.
-       获得可以取消时的检索标志
+       获得 可以取消时 的检索标志，每次都会对m_counter加一，如果超过阈值就会cancel
     */
 
     bool context::get_cancel_flag() {
         return !m.limit().inc();
     }
-
+    //更新参数，在context生成函数中被调用
     void context::updt_params(params_ref const& p) {
         m_params.append(p);
         m_asserted_formulas.updt_params(p);
@@ -129,11 +129,11 @@ namespace smt {
             m_fparams.updt_params(p);
         }
     }
-
+    //返回m_relevancy_lvl和参数中m_relevancy_lvl的最小值
     unsigned context::relevancy_lvl() const {
         return std::min(m_relevancy_lvl, m_fparams.m_relevancy_lvl);
     }
-
+    //拷贝一个context从源ctx到目标ctx，无调用
     void context::copy(context& src_ctx, context& dst_ctx, bool override_base) {
         ast_manager& dst_m = dst_ctx.get_manager();
         ast_manager& src_m = src_ctx.get_manager();
@@ -191,12 +191,12 @@ namespace smt {
               src_ctx.display(tout);
               dst_ctx.display(tout););
     }
-
+    //context的析构函数，释放被context占用的资源
     context::~context() {
         flush();
         m_asserted_formulas.finalize();
     }
-
+    //将src中的m_theory_set中的理论注册进新dst context中， 该方法在copy，mk_fresh中调用
     void context::copy_plugins(context& src, context& dst) {
         // copy theory plugins
         for (theory* old_th : src.m_theory_set) {
@@ -206,7 +206,7 @@ namespace smt {
             dst.register_plugin(new_th);
         }
     }
-
+    //在copy中调用
     void context::copy_user_propagator(context& src_ctx) {
         if (!src_ctx.m_user_propagator) 
             return;
@@ -219,7 +219,7 @@ namespace smt {
             m_user_propagator->add_expr(tr(e));
         }
     }
-
+    //无调用，调用mk_fresh
     context * context::mk_fresh(symbol const * l, smt_params * p, params_ref const& pa) {
         context * new_ctx = alloc(context, m, p ? *p : m_fparams, pa);
         new_ctx->m_is_auxiliary = true;
@@ -227,7 +227,7 @@ namespace smt {
         copy_plugins(*this, *new_ctx);
         return new_ctx;
     }
-    //初始化操作
+    //初始化操作!!!
     void context::init() {
         app * t       = m.mk_true();
         mk_bool_var(t);//首先构造一个为真的bool变量t
@@ -241,16 +241,17 @@ namespace smt {
             set_justification(true_bool_var, m_bdata[true_bool_var], b_justification(mk_justification(justification_proof_wrapper(*this, pr))));//为真文字设置验证
         }
         else {
-            m_bdata[true_bool_var].set_axiom();//如果不使用
+            m_bdata[true_bool_var].set_axiom();//如果不使用,直接给真文字设置原子作为证明
         }
         m_true_enode  = mk_enode(t, true, true, false);
         // internalizer is marking enodes as interpreted whenever the associated ast is a value and a constant.
         // m_true_enode->mark_as_interpreted();
+        //每当关联的ast是一个值和一个常数时，内化器就将enode标记为解释的。
         app * f       = m.mk_false();
         m_false_enode = mk_enode(f, true, true, false);
         // m_false_enode->mark_as_interpreted();
     }
-
+    //设置回调函数
     void context::set_progress_callback(progress_callback *cb) {
         m_progress_callback = cb;
     }
@@ -258,23 +259,25 @@ namespace smt {
     /**
        \brief This method should be used to create equality atoms during the search.
        See comments in theory::mk_eq_atom
+       该方法应该在搜索过程中被用来构造等式原子
+       在assume_eq中被调用
     */
     app * context::mk_eq_atom(expr * lhs, expr * rhs) {
         family_id fid = m.get_sort(lhs)->get_family_id();
         theory * th   = get_theory(fid);
-        if (th)
+        if (th)//如果lhs的family_id对应的理论存在，则用该理论构造等式原子并返回
             return th->mk_eq_atom(lhs, rhs);
         if (lhs->get_id() > rhs->get_id())
-            std::swap(lhs, rhs);
-        return m.mk_eq(lhs, rhs);
+            std::swap(lhs, rhs);//保证lhs的id比rhs的id小
+        return m.mk_eq(lhs, rhs);//如果该理论不存在，就调用ast_manager的mk_eq构造等式原子
     }
-
+    //设置验证，justification，为data d设置相应的justification
     void context::set_justification(bool_var v, bool_var_data& d, b_justification const& j) {
         SASSERT(validate_justification(v, d, j));
         d.set_justification(j);
     }
 
-    //将l对应的bool变量赋值为l的取值，改变m_assignment中的赋值，将l对应的变量数据的phase设置为相反取值，decision表示是否为一次决策操作，
+    //将l对应的bool变量赋值为l的取值，改变m_assignment中的赋值，将l对应的变量数据的phase设置为相反取值，decision表示是否为一次决策操作，在BCP中被调用
     void context::assign_core(literal l, b_justification j, bool decision) {
         m_assigned_literals.push_back(l);//赋值的文字入栈
         m_assignment[l.index()]    = l_true;//将文字所在位置设为true
@@ -305,7 +308,7 @@ namespace smt {
 
         m_case_split_queue->assign_lit_eh(l);
     }
-    //进行bool约束传播
+    //进行bool约束传播，如果发生冲突则返回false，否则成功传播返回true!!!
     bool context::bcp() {
         SASSERT(!inconsistent());
         while (m_qhead < m_assigned_literals.size()) {//该操作会改变m_head
@@ -353,9 +356,9 @@ namespace smt {
                 if (cls->get_literal(0) == not_l) {
                     cls->set_literal(0, cls->get_literal(1));
                     cls->set_literal(1, not_l);
-                }
+                }//要把被watch的子句的第2号设为not l，因为此时它已经是false了
 
-                SASSERT(cls->get_literal(1) == not_l);
+                SASSERT(cls->get_literal(1) == not_l);//l watch的子句的第2个文字是l的非
 
                 literal first_lit     = cls->get_literal(0);
                 lbool   first_lit_val = get_assignment(first_lit);
@@ -373,7 +376,7 @@ namespace smt {
                             // the negation of literal *it3 will watch clause cls.如果it3对应的的赋值不是false，也就找到了cls的watch子句，将it3和位置0的文字交换，用it3的非来watch该子句
                             m_watches[(~(*it3)).index()].insert_clause(cls);
                             cls->set_literal(1, *it3);
-                            *it3   = not_l;//将it3文字和1号位置的文字交换？
+                            *it3   = not_l;//将it3文字和1号位置的文字交换，it3号的位置是个可以作为watch的
                             goto found_watch;
                         }
                     }
@@ -407,7 +410,7 @@ namespace smt {
                             // IMPORTANT: this kind of propagation asserts negative literals of the form (= A1 A2) where
                             // A1 and A2 are array terms. So, it may be interesting to disable it for array eqs.
                             //if (!(m.is_eq(e) && m.get_sort(to_app(e)->get_arg(0))->get_family_id() == m.get_family_id("array")))
-                            //这种传播断言形式（= A1 A2）的负文字，其中A1和A2是数组项。所以对数组等式禁用它可能很有趣
+                            //这种传播 断言了 形如（= A1 A2）的负文字，其中A1和A2是数组项。所以对数组等式禁用它可能很有趣
                             mark_as_relevant(e);
                         }
                     }
@@ -449,7 +452,7 @@ namespace smt {
 
         m_th_diseq_propagation_queue.push_back(new_th_eq(th, lhs, rhs));//不等式传播队列中添加一个不等式，是以等式的形式存储
     }
-
+    //在add_eq中被调用，加入到trail中
     class add_eq_trail : public trail<context> {
         enode * m_r1;
         enode * m_n1;
@@ -467,7 +470,11 @@ namespace smt {
     };
 
     /**
-       \brief Add the equality n1 = n2 with justification js into the logical context.添加带有证明js的等式n1=n2到逻辑context中
+       \brief Add the equality n1 = n2 with justification js into the logical context.
+       添加带有证明js的等式n1=n2到逻辑context中
+       会选择n1和n2所在的较大的分支，然后将较小的分支中的所有enode都合并到较大的分支中去
+       结果是n1 -> ... -> r1  n2 -> ... -> r2合并成r1 -> ..  -> n1 -> n2 -> ... -> r2
+        在propagate_bool_var_enode，propogate_eqs，propagate_atoms中被调用
     */
     void context::add_eq(enode * n1, enode * n2, eq_justification js) {
         unsigned old_trail_size = m_trail_stack.size();
@@ -480,17 +487,17 @@ namespace smt {
             SASSERT(m.get_sort(n1->get_owner()) == m.get_sort(n2->get_owner()));
 
             m_stats.m_num_add_eq++;
-            enode * r1 = n1->get_root();
+            enode * r1 = n1->get_root();//r1，r2分别是n1和n2的根
             enode * r2 = n2->get_root();
 
 
-            if (r1 == r2) {
+            if (r1 == r2) {//如果两个已经属于同一个等价类，即两者的根相同，则是一个多余约束
                 TRACE("add_eq", tout << "redundant constraint.\n";);
                 return;
             }
             IF_VERBOSE(20, verbose_stream() << "merge " << mk_bounded_pp(n1->get_owner(), m) << " " << mk_bounded_pp(n2->get_owner(), m) << "\n");
 
-            if (r1->is_interpreted() && r2->is_interpreted()) {
+            if (r1->is_interpreted() && r2->is_interpreted()) {//如果r1和r2都被解释了，则说明产生冲突
                 TRACE("add_eq", tout << "interpreted roots conflict.\n";);
                 set_conflict(mk_justification(eq_conflict_justification(n1, n2, js)));
                 return;
@@ -500,6 +507,8 @@ namespace smt {
             //  1. if the "equivalence" class of r1 is bigger than the equivalence class of r2
             //  OR
             //  2. r1 is interpreted but r2 is not.
+            //交换r1和r2如果：r1的等价类 大于 r2的等价类；
+            //r1被解释了但是r2没有，这种情况用来强迫以下不变量：如果一个类包含类一个已解释enode 则 其根也是被解释的
             //
             // The second condition is used to enforce the invariant that if a class contain
             // an interpreted enode then the root is also interpreted.
@@ -507,7 +516,7 @@ namespace smt {
                 SASSERT(!r2->is_interpreted());
                 std::swap(n1, n2);
                 std::swap(r1, r2);
-            }
+            }//交换之后r2是更大的根
 
             TRACE("add_eq", tout << "merging: #" << r1->get_owner_id() << " #" << r2->get_owner_id() <<
                   " n1: #" << n1->get_owner_id() << "\n";);
@@ -515,6 +524,7 @@ namespace smt {
             // It is necessary to propagate relevancy to other elements of
             // the equivalence class. This is necessary to enforce the invariant
             // in the field m_parent of the enode class.
+            //有必要将相关性传播给等价类中的其他元素。  这是在 enode类的m_parent字段中 强迫不变性质 有必要的。
             if (is_relevant(r1)) { // && !m.is_eq(r1->get_owner())) !is_eq HACK
                 // NOTE for !is_eq HACK... the !is_eq HACK does not propagate relevancy when two
                 // equality enodes are congruent. I tested this optimization because in V1
@@ -523,6 +533,7 @@ namespace smt {
                 // efficiently.
                 // I disabled this optimization HACK because it breaks invariants in the rest of the code.
                 // To use it, I need to go over the code and analyze all affected places.
+                //注意：对于!is_eq HACK，当两个等式enode是一致的时，!is_eq不会传播相关性。使用了同余表来高效传播不等式
                 mark_as_relevant(r2);
             }
             else if (is_relevant(r2)) { // && !m.is_eq(r2->get_owner())) { // !is_eq HACK
@@ -534,39 +545,39 @@ namespace smt {
             m_qmanager->add_eq_eh(r1, r2);
 
 
-            merge_theory_vars(n2, n1, js);
+            merge_theory_vars(n2, n1, js);//将n1和n2的根节点的理论变量合并，结果存放在n2的根节点中
 
             // 'Proof' tree
             // n1 -> ... -> r1
             // n2 -> ... -> r2
             SASSERT(n1->trans_reaches(r1));
-            invert_trans(n1);
+            invert_trans(n1);//将n1->...->r1的序列链表反转
             n1->m_trans.m_target        = n2;
             n1->m_trans.m_justification = js;
             n1->m_proof_is_logged   = false;
             SASSERT(r1->trans_reaches(n1));
             // ---------------
-            // r1 -> ..  -> n1 -> n2 -> ... -> r2
+            // r1 -> ..  -> n1 -> n2 -> ... -> r2 会把r1一支的enode都连到r2
 
-            remove_parents_from_cg_table(r1);
+            remove_parents_from_cg_table(r1);//当合并进等价类时，最小的那个(也就是全等的根)的父亲节点要被从全等表格中移除，因为它的hash编码会改变，也就是r1会被移除
 
             enode * curr = r1;
             do {
                 curr->m_root = r2;
                 curr = curr->m_next;
             }
-            while(curr != r1);
+            while(curr != r1);//将r1的所有m_next的元素的root都设为r2，相当于将r1的一条支路上的enode都以r2为根
 
             SASSERT(r1->get_root() == r2);
             reinsert_parents_into_cg_table(r1, r2, n1, n2, js);
 
-            if (n2->is_bool())
+            if (n2->is_bool())//如果n2是bool的，则传播其布尔赋值
                 propagate_bool_enode_assignment(r1, r2, n1, n2);
 
-            // Merge "equivalence" classes
+            // Merge "equivalence" classes 合并等价类
             std::swap(r1->m_next, r2->m_next);
 
-            // Update "equivalence" class size
+            // Update "equivalence" class size 更新等价类大小
             r2->m_class_size += r1->m_class_size;
 
             CASSERT("add_eq", check_invariant());
@@ -584,6 +595,7 @@ namespace smt {
        \brief When merging to equivalence classes, the parents of the smallest one (that are congruence roots),
        must be removed from the congruence table since their hash code will change.
        当合并进等价类时，最小的那个(也就是全等的根)的父亲节点要被从全等表格中移除，因为它的hash编码会改变
+       在add_eq中调用
     */
     void context::remove_parents_from_cg_table(enode * r1) {
         // Remove parents from the congruence table
@@ -625,9 +637,10 @@ namespace smt {
        The n1, n2, js arguments are used to implement dynamic ackermanization.
        js is a justification for n1 and n2 being equal, and the equality n1 = n2 is
        the one that implied r1 = r2.
-       将因为remove_parents_from_cg_table函数而被从cg_table中移除的r1的父亲节点重新插入，一些此类父亲节点会和其他的enode变得全等，并且一些新等式会被传播，此外该方法也被用来做等式传播
+       将 因为remove_parents_from_cg_table函数 而被从cg_table中移除的r1的父亲节点重新插入，一些此类父亲节点会和其他的enode变得全等，并且一些新等式会被传播，此外该方法也被用来做等式传播
        如果r1的父亲节点还是全等根，则会被复制为r2的父亲节点
        n1, n2, js是用来实现动态ackermanization的参数，js是一个n1和n2相等的证明，并且等式n1=n2是r1=r2推出的
+       会在add_eq中被调用
     */
     void context::reinsert_parents_into_cg_table(enode * r1, enode * r2, enode * n1, enode * n2, eq_justification js) {
         enode_vector & r2_parents  = r2->m_parents;
@@ -695,7 +708,9 @@ namespace smt {
        and, there is an k such that N_k = n->get_root()
 
        This method will invert this branch.
-       一个由如下 从n开始到n->get_root结束的序列 表示的传递证明，通过N_i->m_trans.m_target逐层向上传递直到root，该方法会反转这个分支，相当于链表反转
+       一个由如下 从n开始到n->get_root结束的序列 表示的传递证明，通过N_i->m_trans.m_target逐层向上传递直到root，存在一个k是的N_k=n->get_root()
+       该方法会反转这个分支，相当于链表反转
+       在undo_add_eq和add_eq中被调用
     */
     void context::invert_trans(enode * n) {
         enode * curr                      = n->m_trans.m_target;
@@ -756,23 +771,25 @@ namespace smt {
        the logical context will send the natural sequence of equalities to the theories:
 
        n1 = n2 = n3 = n4 = n5 = n6
+
        假设r是n的根，并且r包含了对于理论th_id的理论变量，该方法会返回一个在证明分支(n->...->r)上更靠近n的理论变量
-       该方法被用来提升由逻辑context产生的冲突子句的质量
+       该方法被用来提升由逻辑context产生的 “冲突子句” 的质量
        考虑如下例子：
        由一系列等式序列n1=n2=...n6，假设在每次合并之后n1是等价类的根，所以证明序列会有如下形状：n1 <- n2 <- n3 <- n4 <- n5 <- n6
        假设所有的节点都连接着理论变量，如果get_closet没有被使用，则下面的等式序列会被交给理论：n1 = n2, n1 = n3, n1 = n4, n1 = n5, n1 = n6，该序列不好，并且理论可能会产生坏的证明。
        例如假设存在如下数值约束：n5 < n6，对于算术理论模块，最好的证明是n1 = n5, n1 = n6 and n5 < n6
        该证明包含了不必要的句子来证明n5=n6，也就是为了证明n5 = n6，用了n1 = n5 and n1 = n6
        如果是用来get_closest_var方法，则逻辑context会交给理论如下自然的等式序列n1 = n2 = n3 = n4 = n5 = n6
+       我认为：就是在寻找这条路径上的各个enode，直到找到根，而不需要通过根来传递等式
     */
     theory_var context::get_closest_var(enode * n, theory_id th_id) {
         if (th_id == null_theory_id)
-            return null_theory_var;
+            return null_theory_var;//如果是空理论，则返回空理论变量
         while (n != nullptr) {
-            theory_var v = n->get_th_var(th_id);
-            if (v != null_theory_var)
+            theory_var v = n->get_th_var(th_id);//v是enode 的中理论th_id的理论变量
+            if (v != null_theory_var)//如果v不是空理论变量，就返回
                 return v;
-            n = n->m_trans.m_target;
+            n = n->m_trans.m_target;//m_trans是该enode等价于根的证明，通过它更新n
         }
         return null_theory_var;
     }
@@ -780,10 +797,11 @@ namespace smt {
     /**
        \brief Merge the theory variables of n2->get_root() and n1->get_root(), the result is stored in n2->get_root().
        New th_var equalities are propagated to the theories.
-
-       \remark In most cases, an enode is attached to at most one theory var.
        将n1和n2的根节点的理论变量合并，结果存放在n2的根节点中，新的理论变量等式会传播给理论
        在大多数情况下，一个enode只会和最多一个理论变量联系
+       在add_eq中调用
+
+       \remark In most cases, an enode is attached to at most one theory var.
     */
     void context::merge_theory_vars(enode * n2, enode * n1, eq_justification js) {
         enode * r2 = n2->get_root();
@@ -799,7 +817,7 @@ namespace smt {
             from_th = js.get_justification()->get_from_theory();
 
         if (r2->m_th_var_list.get_next() == nullptr && r1->m_th_var_list.get_next() == nullptr) {
-            // Common case: r2 and r1 have at most one theory var.
+            // Common case: r2 and r1 have at most one theory var. 常见情况：r2和r1都只有最多一个理论变量
             theory_id  t2 = r2->m_th_var_list.get_id();
             theory_id  t1 = r1->m_th_var_list.get_id();
             theory_var v2 = m_fparams.m_new_core2th_eq ? get_closest_var(n2, t2) : r2->m_th_var_list.get_var();
@@ -807,24 +825,26 @@ namespace smt {
             TRACE("merge_theory_vars",
                   tout << "v2: " << v2 << " #" << r2->get_owner_id() << ", v1: " << v1 << " #" << r1->get_owner_id()
                   << ", t2: " << t2 << ", t1: " << t1 << "\n";);
-            if (v2 != null_theory_var && v1 != null_theory_var) {
-                if (t1 == t2) {
+            if (v2 != null_theory_var && v1 != null_theory_var) {//如果v2和v1都不是空理论变量
+                if (t1 == t2) {//如果n1，n2的理论相同，并且不是js的理论，则要添加 理论等式 用来传播
                     // only send the equality to the theory, if the equality was not propagated by it.
+                    // 只把等式交给理论，如果等式没有被它传播
                     if (t1 != from_th)
-                        push_new_th_eq(t1, v2, v1);
+                        push_new_th_eq(t1, v2, v1);//添加理论等式
                 }
-                else {
+                else {//n1，n2的理论不同
                     // uncommon case: r2 will have two theory_vars attached to it.
-                    r2->add_th_var(v1, t1, m_region);
-                    push_new_th_diseqs(r2, v1, get_theory(t1));
+                    //不常规的情况，r2会有2个相关的理论变量
+                    r2->add_th_var(v1, t1, m_region);//把(v1,t1)元素加到理论变量列表中
+                    push_new_th_diseqs(r2, v1, get_theory(t1));//添加理论不等式
                     push_new_th_diseqs(r1, v2, get_theory(t2));
                 }
             }
-            else if (v1 == null_theory_var && v2 != null_theory_var) {
+            else if (v1 == null_theory_var && v2 != null_theory_var) {//只有v1是空理论变量
                 push_new_th_diseqs(r1, v2, get_theory(t2));
             }
-            else if (v1 != null_theory_var && v2 == null_theory_var) {
-                r2->m_th_var_list.set_var(v1);
+            else if (v1 != null_theory_var && v2 == null_theory_var) {//只有v2是空理论变量
+                r2->m_th_var_list.set_var(v1);//把r2的理论变量列表设为v1的
                 r2->m_th_var_list.set_id(t1);
                 TRACE("merge_theory_vars", tout << "push_new_th_diseqs v1: " << v1 << ", t1: " << t1 << "\n";);
                 push_new_th_diseqs(r2, v1, get_theory(t1));
@@ -832,6 +852,7 @@ namespace smt {
         }
         else {
             // r1 and/or r2 have more than one theory variable.
+            //r1或者r2有超过一个理论变量
             TRACE("merge_theory_vars",
                   tout << "#" << r1->get_owner_id() << " == #" << r2->get_owner_id() << "\n";);
 
@@ -846,6 +867,7 @@ namespace smt {
 
                 if (v1 != null_theory_var) {
                     // only send the equality to the theory, if the equality was not propagated by it.
+                    //只吧等式传播给理论，如果等式没有被它传播
                     if (t2 != from_th)
                         push_new_th_eq(t2, v2, v1);
                 }
@@ -874,6 +896,7 @@ namespace smt {
     /**
        \brief Propagate the boolean assignment when two equivalence classes are merged.
        当2个等价类被合并的时候，传播布尔赋值
+       在add_eq中被调用
     */
     void context::propagate_bool_enode_assignment(enode * r1, enode * r2, enode * n1, enode * n2) {
         SASSERT(n1->is_bool());
@@ -884,14 +907,14 @@ namespace smt {
             bool sign = r2 == m_false_enode;//如果r2为false_enode则sign为true
             enode * curr = r1;
             do {
-                SASSERT(curr != m_false_enode);
+                SASSERT(curr != m_false_enode);//curr不是false_enode
                 bool_var v = enode2bool_var(curr);
                 literal l(v, sign);
-                if (get_assignment(l) != l_true)
+                if (get_assignment(l) != l_true)//如果l的赋值不是真，则给它赋值层真的,也就是把curr对应的值赋值成和r2相同的
                     assign(l, mk_justification(eq_root_propagation_justification(curr)));
                 curr = curr->m_next;
             }
-            while (curr != r1);//逐个从r1开始寻找下一个
+            while (curr != r1);//逐个寻找下一个，直到找回到r1
         }
         else {//如果r2不是true或者false
             bool_var v1 = enode2bool_var(n1);
@@ -912,6 +935,7 @@ namespace smt {
        and the boolean variable associated with source is assigned. Then,
        copy the assignment to the boolean variables associated with target.
        源和目标是boolean的enode，他们被证实是相同的，并且和源相关的布尔变量是被赋值的，则将赋值复制给目标相关的布尔变量
+       在propogate_bool_enode_assignment中被调用
     */
     void context::propagate_bool_enode_assignment_core(enode * source, enode * target) {
         SASSERT(source->is_bool());
@@ -934,15 +958,15 @@ namespace smt {
         }
         while (first != target);
     }
-
+    //消除add_eq操作
     void context::undo_add_eq(enode * r1, enode * n1, unsigned r2_num_parents) {
         enode * r2 = r1->get_root();
         TRACE("add_eq", tout << "undo_add_eq #" << r1->get_owner_id() << " #" << r2->get_owner_id() << "\n";);
 
-        // restore r2 class size
+        // restore r2 class size 恢复r2的类大小
         r2->m_class_size -= r1->m_class_size;
 
-        // unmerge "equivalence" classes
+        // unmerge "equivalence" classes 分离等价类
         std::swap(r1->m_next, r2->m_next);
 
         // remove the parents of r1 that remained as congruence roots
@@ -1034,8 +1058,10 @@ namespace smt {
        get_theory(t2)->get_enode(v2)->get_root() != r2
 
        That is, v2 is not equivalent to r2 anymore.
-       为undo_add_eq设计的附加方法，它存储了给定root enode的理论变量
-       该方法删除了r2的任意理论变量v2（对于理论t2），当t2的enode的根不等于r2时，也就是v2不在等于r2
+       恢复理论变量
+       为undo_add_eq设计的附加方法，它恢复了给定 根 enode的理论变量
+       该方法删除了r2的任意理论变量v2（对于理论t2），当t2的enode的根不等于r2时，也就是v2不再等价于r2
+       在undo_add_eq中被调用
     */
     void context::restore_theory_vars(enode * r2, enode * r1) {
         SASSERT(r2->get_root() == r2);
@@ -1046,7 +1072,7 @@ namespace smt {
             theory_id t2  = l2->get_id();
 
             if (get_theory(t2)->get_enode(v2)->get_root() != r2) {//如果t2中的v2的根不是r2
-                SASSERT(get_theory(t2)->get_enode(v2)->get_root() == r1);
+                SASSERT(get_theory(t2)->get_enode(v2)->get_root() == r1);//要保证t2中v2的根是r1
                 l2 = l2->get_next();
             }
             else {
@@ -1074,7 +1100,10 @@ namespace smt {
     /**
        \brief This method is invoked when a new disequality is asserted.
        The disequality is propagated to the theories.
-       该方法在一个新的不等式被断言的时候调用，不等式会被传播到理论
+       该方法在一个新的不等式(n1!=n2)被断言的时候调用，不等式被传播到理论
+       该方法在propagate_atoms方法中被调用，向不等式传播队列中添加相应的不等式
+       注意此处添加进的队列是“理论”不等式队列
+       在propogate_atom中调用
     */
     bool context::add_diseq(enode * n1, enode * n2) {
         enode * r1 = n1->get_root();
@@ -1099,9 +1128,9 @@ namespace smt {
             return get_theory(t1)->use_diseqs();
         }
 
-        // Propagate disequalities to theories
+        // Propagate disequalities to theories 将不等式传播给理论
         if (r1->m_th_var_list.get_next() == nullptr && r2->m_th_var_list.get_next() == nullptr) {
-            // common case: r2 and r1 have at most one theory var.
+            // common case: r2 and r1 have at most one theory var. 常规情况：r2和r1有最多一个理论变量
             theory_id  t1 = r1->m_th_var_list.get_id();
             theory_var v1 = m_fparams.m_new_core2th_eq ? get_closest_var(n1, t1) : r1->m_th_var_list.get_var();
             theory_var v2 = m_fparams.m_new_core2th_eq ? get_closest_var(n2, t1) : r2->m_th_var_list.get_var();
@@ -1112,10 +1141,10 @@ namespace smt {
             if (t1 != null_theory_id && v1 != null_theory_var && v2 != null_theory_var &&
                 t1 == r2->m_th_var_list.get_id()) {
                 if (get_theory(t1)->use_diseqs())
-                    push_new_th_diseq(t1, v1, v2);
+                    push_new_th_diseq(t1, v1, v2);//将该不等式添加到不等式传播队列中
             }
         }
-        else {
+        else {//r1的理论变量是一个list，而非当个变量
             theory_var_list * l1 = r1->get_th_var_list();
             while (l1) {
                 theory_id  t1 = l1->get_id();
@@ -1125,7 +1154,7 @@ namespace smt {
                 if (th->use_diseqs()) {
                     theory_var v2 = m_fparams.m_new_core2th_eq ? get_closest_var(n2, t1) : r2->get_th_var(t1);
                     if (v2 != null_theory_var)
-                        push_new_th_diseq(t1, v1, v2);
+                        push_new_th_diseq(t1, v1, v2);//逐个将不等式添加到不等式传播队列中
                 }
                 l1 = l1->get_next();
             }
@@ -1288,6 +1317,7 @@ namespace smt {
 
     /**
        \brief Return an enode n congruent to (f args). If there is no such enode in the E-graph, then return 0.
+        返回一个一致于func_decl f的enode n。如果在E-graph中不存在这样的enode，则返回0
      */
     enode * context::get_enode_eq_to(func_decl * f, unsigned num_args, enode * const * args) {
         enode * tmp = m_tmp_enode.set(f, num_args, args);
@@ -1319,6 +1349,10 @@ namespace smt {
 
     /**
        \brief Process the equality propagation queue.
+       处理等式传播队列，assign_eq会给该队列添加一个元素， 逐个遍历 m_eq_propagation_queue 队列中的等式，调用add_eq函数将等式添加到context中
+       该队列中的元素是来自于assign_eq方法
+       在propogate中调用
+       （注意区分等式 和 理论等式）
 
        \remark The method assign_eq adds a new entry on this queue.
     */
@@ -1338,11 +1372,12 @@ namespace smt {
 
     /**
        \brief Process equalities, theory atoms, etc.
+       处理 等式，理论原子等，逐个遍历原子传播队列中的文字，进行enode传播，等式/不等式传播 在propogate中调用
     */
     bool context::propagate_atoms() {
         SASSERT(!inconsistent());
         CTRACE("propagate_atoms", !m_atom_propagation_queue.empty(), tout << m_atom_propagation_queue << "\n";);
-        for (unsigned i = 0; i < m_atom_propagation_queue.size() && !get_cancel_flag(); i++) {
+        for (unsigned i = 0; i < m_atom_propagation_queue.size() && !get_cancel_flag(); i++) {//逐个遍历 原子传播队列 中的文字
             SASSERT(!inconsistent());
             literal  l = m_atom_propagation_queue[i];
             bool_var v = l.var();
@@ -1350,12 +1385,12 @@ namespace smt {
             lbool val  = get_assignment(v);
             TRACE("propagate_atoms", tout << "propagating atom, #" << bool_var2expr(v)->get_id() << ", is_enode(): " << d.is_enode()
                   << " tag: " << (d.is_eq()?"eq":"") << (d.is_theory_atom()?"th":"") << (d.is_quantifier()?"q":"") << " " << l << "\n";);
-            SASSERT(val != l_undef);
+            SASSERT(val != l_undef);//l不能是未赋值的
             if (d.is_enode())
-                propagate_bool_var_enode(v);
+                propagate_bool_var_enode(v);//如果该文字对应的是enode，则传播 赋给v的真值 到 与v相关的enode（应该是等价类的传播）
             if (inconsistent())
-                return false;
-            if (d.is_eq()) {
+                return false;//如果不一致直接返回冲突 false
+            if (d.is_eq()) {//如果d代表的是eq，则val是true代表是等式，false是代表不等式
                 app * n   = to_app(m_bool_var2expr[v]);
                 SASSERT(m.is_eq(n));
                 expr * lhs = n->get_arg(0);
@@ -1363,10 +1398,10 @@ namespace smt {
                 if (m.is_bool(lhs)) {
                     // no-op
                 }
-                else if (val == l_true) {
+                else if (val == l_true) {//添加等式到等式传播队列中
                     add_eq(get_enode(lhs), get_enode(rhs), eq_justification(l));
                 }
-                else {
+                else {//添加不等式到不等式传播队列中
                     TRACE("add_diseq", display_eq_detail(tout, bool_var2enode(v)););
                     if (!add_diseq(get_enode(lhs), get_enode(rhs)) && !inconsistent()) {
                         literal n_eq = literal(l.var(), true);
@@ -1400,7 +1435,7 @@ namespace smt {
         m_atom_propagation_queue.reset();
         return true;
     }
-
+    //在set_var_theory中调用
     class set_var_theory_trail : public trail<context> {
         bool_var m_var;
     public:
@@ -1410,10 +1445,10 @@ namespace smt {
             d.reset_notify_theory();
         }
     };
-
+    //为变量设置理论号，为布尔变量v的m_bdata 设置相应的理论号
     void context::set_var_theory(bool_var v, theory_id tid) {
         SASSERT(get_var_theory(v) == null_theory_var);
-        SASSERT(tid > 0 && tid <= 255);
+        SASSERT(tid > 0 && tid <= 255);//理论号在1～255之间
         SASSERT(get_intern_level(v) <= m_scope_lvl);
         if (m_scope_lvl > get_intern_level(v))
             push_trail(set_var_theory_trail(v));
@@ -1426,15 +1461,17 @@ namespace smt {
        associated with v.  Let n be the enode associated with v. Then,
        this method merges n = true_term (n = false_term) if v was
        assigned to true (false).
-       传播赋值给v的真值到与v相关的enode（应该是等价类的传播），设n是与v相关的enode，则如果v被赋值为true，该方法将合并n=true_term
+       传播赋值给v的真值 到 与v相关的enode（应该是等价类的传播）
+       设n是与v相关的enode，则如果v被赋值为true，该方法将合并n=true_term
+       在propogate_atom中被调用
     */
     void context::propagate_bool_var_enode(bool_var v) {
-        SASSERT(get_assignment(v) != l_undef);
+        SASSERT(get_assignment(v) != l_undef);//该变量v目前已经被赋值了
         SASSERT(get_bdata(v).is_enode());
         lbool val  = get_assignment(v);
         TRACE("propagate_bool_var_enode_bug", tout << "var: " << v << " #" << bool_var2expr(v)->get_id() << "\n";);
         SASSERT(v < static_cast<int>(m_b_internalized_stack.size()));
-        enode * n  = bool_var2enode(v);
+        enode * n  = bool_var2enode(v);//n是与v相关的enode
 
         CTRACE("mk_bool_var", !n, tout << "No enode for " << v << "\n";);
         bool sign  = val == l_false;
@@ -1448,7 +1485,9 @@ namespace smt {
         // Move truth value to other elements of the equivalence class if:
         //   1) n is the root of the equivalence class
         //   2) n is not the root, but the variable associated with the root is unassigned.
-        //将真值转移到等价类的其他元素中，如果(1)n是等价类的根，(2)n不是等价类的根但与根关联的变量未被赋值
+        //将真值转移到等价类的其他元素中，如果
+        //(1)n是等价类的根
+        //(2)n不是等价类的根， 但与根关联的变量未被赋值
         if (n == r ||
             !is_relevant(r) || // <<<< added to fix propagation bug.
             get_assignment(enode2bool_var(r)) != val) {
@@ -1466,7 +1505,8 @@ namespace smt {
     /**
        \brief Traverse the disequalities of r's equivalence class, and
        propagate them to the theory.
-       遍历r的等价类的不等式，并将他们传播给理论
+       遍历r的等价类的不等式，并将他们传播给理论,在merge_theory_vars中被调用
+       会调用push_new_th_diseq来向m_th_diseq_propagation_queue队列中加入不等式
     */
     void context::push_new_th_diseqs(enode * r, theory_var v, theory * th) {
         if (!th->use_diseqs()) {
@@ -1503,7 +1543,7 @@ namespace smt {
                         if (_v != null_theory_var)
                             v = _v;
                     }
-                    if (rhs_var != null_theory_var && v != rhs_var /* if v == rhs_var then the context will detect the inconsistency. */)
+                    if (rhs_var != null_theory_var && v != rhs_var /* if v == rhs_var then the context will detect the inconsistency. */)//如果v==rhs_var则会检测到不一致
                         push_new_th_diseq(th_id, v, rhs_var);
                 }
             }
@@ -1513,6 +1553,7 @@ namespace smt {
     /**
        \brief Return the truth assignment for an expression
        that is attached to a boolean variable.
+       返回一个 与布尔变量相联系的 表达式的真值，该表达式必须与一个布尔变量相关联
 
        \pre The expression must be attached to a boolean variable.
     */
@@ -1529,6 +1570,7 @@ namespace smt {
        \brief Return the truth assignment for an expression.
        If the expression is a not-application, then its child
        is inspected instead.
+       返回一个表达式的真值，如果该表达式是一个not-application，则检测他的子节点
     */
     lbool context::get_assignment(expr * n) const {
         if (m.is_false(n))
@@ -1538,7 +1580,7 @@ namespace smt {
             return ~get_assignment_core(arg);
         return get_assignment_core(n);
     }
-
+    //此处的n未必是和bool变量相关联的，若无关联则返回undef
     lbool context::find_assignment(expr * n) const {
         if (m.is_false(n))
             return l_false;
@@ -1556,6 +1598,7 @@ namespace smt {
     /**
        \brief Return the assignment of a 'boolean' enode.
        If the enode is not boolean, then return l_undef.
+       返回一个bool enode的赋值，如果该enode不是bool的，则返回undef
     */
     lbool context::get_assignment(enode * n) const {
         expr * owner = n->get_owner();
@@ -1570,6 +1613,7 @@ namespace smt {
 
     /**
        \brief Return set of assigned literals as expressions.
+       返回已赋值文字的值 作为表达式返回，逐个遍历赋值文字，将其转为expr_ref，收集于expr_ref_vector assignments中
     */
     void context::get_assignments(expr_ref_vector& assignments) {
         for (literal lit : m_assigned_literals) {
@@ -1578,7 +1622,7 @@ namespace smt {
             assignments.push_back(std::move(e));
         }
     }
-
+    //无调用
     void context::relevant_eh(expr * n) {
         if (b_internalized(n)) {
             bool_var v        = get_bool_var(n);
@@ -1631,6 +1675,7 @@ namespace smt {
        \brief Propagate relevancy using the queue of new assigned literals
        located at [qhead, m_assigned_literals.size()).
         用位于[qhead, m_assigned_literals.size())的新赋值的文字队列，来传播相关性
+        对 从qhead开始的所有被赋值的文字 传播相关性
     */
     void context::propagate_relevancy(unsigned qhead) {
         if (!relevancy())
@@ -1648,7 +1693,7 @@ namespace smt {
     }
     //理论传播，对每个理论都进行传播，如果出现了不一致，则返回false，如果所有的理论传播都一致，则返回true
     bool context::propagate_theories() {
-        for (theory * t : m_theory_set) {
+        for (theory * t : m_theory_set) {//对每个理论逐个传播，出现一个理论传播之后不一致就会返回false
             t->propagate();//理论传播
             if (inconsistent())
                 return false;
@@ -1660,7 +1705,7 @@ namespace smt {
 #endif
         return true;
     }
-    //将等式传播序列中的所有等式都添加到理论中，进行等式传播
+    //将 等式传播序列 中的所有等式都添加到理论中，进行等式传播，调用相应理论的new_eq_eh句柄 在propogate中被调用
     void context::propagate_th_eqs() {
         for (unsigned i = 0; i < m_th_eq_propagation_queue.size() && !inconsistent(); i++) {//遍历等式传播队列
             new_th_eq curr = m_th_eq_propagation_queue[i];//选取等式传播队列中的第i个等式
@@ -1673,7 +1718,7 @@ namespace smt {
         }
         m_th_eq_propagation_queue.reset();
     }
-    //将不等式传播队列中的所有不等式都添加到理论中，进行不等式传播
+    //将 不等式传播队列 中的所有不等式都添加到理论中，进行不等式传播，调用各自理论的new_disq_eh句柄
     void context::propagate_th_diseqs() {
         for (unsigned i = 0; i < m_th_diseq_propagation_queue.size() && !inconsistent(); i++) {
             new_th_eq curr = m_th_diseq_propagation_queue[i];
@@ -1686,7 +1731,7 @@ namespace smt {
         }
         m_th_diseq_propagation_queue.reset();
     }
-    //如果可以理论传播则返回true，逐个检测每个理论，如果存在一个理论可以传播，就返回true
+    //如果可以理论传播则返回true，逐个检测每个理论，如果存在一个理论可以传播，就返回true，如果都不可以传播才返回false
     bool context::can_theories_propagate() const {
         for (theory* t : m_theory_set) {
             if (t->can_propagate()) {
@@ -1695,7 +1740,7 @@ namespace smt {
         }
         return false;
     }
-    //判断是否可以继续传播
+    //判断是否可以继续传播，如果可以返回true，在final_check和propogate中调用
     bool context::can_propagate() const {
         return//满足如下情况之一都是可以继续传播的
             m_qhead != m_assigned_literals.size() ||//如果所有已经赋值的文字都已经被考察
@@ -1710,7 +1755,7 @@ namespace smt {
 
     /**
        \brief retrieve facilities for creating induction lemmas.
-       检索用于创建归纳引理的工具。
+       检索用于创建归纳引理的工具。在propagate_relevancy中被调用
      */
     induction& context::get_induction() {
         if (!m_induction) {//如果m_induction不存在，则分配一个
@@ -1722,11 +1767,14 @@ namespace smt {
     /**
        \brief unit propagation.
        Cancelation is not safe during propagation at base level because
-       congruences cannot be retracted to a consistent state. 在底层传播期间取消是不安全的，因为同于不能恢复到一致状态
+       congruences cannot be retracted to a consistent state.
+        在底层传播期间取消是不安全的，因为congreuences不能恢复到一致状态
+
        单元传播
        返回是否需要decide
        如果不一致则返回false，
        如果不能传播了，则返回true，此时需要进行decide操作；或者如果资源耗尽了，就需要跳出走向unknown
+       在push，decide，bounded_search，init_assumptions中被调用!!!
      */
     bool context::propagate() {
         TRACE("propagate", tout << "propagating... " << m_qhead << ":" << m_assigned_literals.size() << "\n";);
@@ -1736,7 +1784,7 @@ namespace smt {
             unsigned qhead = m_qhead;//记录下旧的m_qhead，指向bcp尚未处理的assigned文字，m_qhead会在bcp的过程中变化，而其余传播要从旧的m_qhead开始
             {
                 scoped_suspend_rlimit _suspend_cancel(m.limit(), at_base_level());
-                if (!bcp())//对bool变量进行传播
+                if (!bcp())//对bool变量进行传播，如果发生冲突就返回false
                     return false;
                 if (!propagate_th_case_split(qhead))//传播理论case_split，如果发生冲突，就返回false，该操作不会改变m_head
                     return false;
@@ -1744,7 +1792,7 @@ namespace smt {
                 propagate_relevancy(qhead);//传播相关性
                 if (inconsistent())
                     return false;
-                if (!propagate_atoms())//传播原子
+                if (!propagate_atoms())//传播原子 处理等式 原子等
                     return false;
                 if (!propagate_eqs())//传播命题层面的等式
                     return false;
@@ -1773,7 +1821,7 @@ namespace smt {
         }
     }
 
-    //设置冲突，如果不一致就设置冲突为js，如果not_l为空，则冲突中只包含js
+    //设置冲突，如果不一致就设置冲突为js
     void context::set_conflict(const b_justification & js, literal not_l) {
         if (!inconsistent()) {
             TRACE("set_conflict", display_literal_verbose(tout << m_scope_lvl << " ", not_l); display(tout << " ", js); );
@@ -1781,21 +1829,21 @@ namespace smt {
             m_not_l    = not_l;
         }
     }
-
+    //为量词赋值，在propagate_atoms中被调用
     void context::assign_quantifier(quantifier * q) {
         TRACE("assumption", tout << mk_pp(q, m) << "\n";);
         m_qmanager->assign_eh(q);
     }
-
+    //胖蛋是否包含实例，无调用
     bool context::contains_instance(quantifier * q, unsigned num_bindings, enode * const * bindings) {
         return m_fingerprints.contains(q, q->get_id(), num_bindings, bindings);
     }
-
+    //添加例子，无调用
     bool context::add_instance(quantifier * q, app * pat, unsigned num_bindings, enode * const * bindings, expr* def, unsigned max_generation,
                                unsigned min_top_generation, unsigned max_top_generation, vector<std::tuple<enode *, enode *>> & used_enodes) {
         return m_qmanager->add_instance(q, pat, num_bindings, bindings, def, max_generation, min_top_generation, max_top_generation, used_enodes);
     }
-
+    //重新放缩bool变量的活跃度，无调用
     void context::rescale_bool_var_activity() {
         TRACE("case_split", tout << "rescale\n";);        
         svector<double>::iterator it  = m_activity.begin();
@@ -1808,7 +1856,9 @@ namespace smt {
     /**
        \brief Execute next case split, return false if there are no
        more case splits to be performed.
-       执行下一个case split，如果没有case_split可以操作就返回false
+       执行下一个case split，如果没有case_split可以操作就返回false（启发式）
+       仅在bounded_search中被调用，调用了decide_clause
+       会在tmp_clause中的所有子句都已经满足的情况下选择一个变量赋值!!!
     */
     bool context::decide() {
 
@@ -1824,7 +1874,7 @@ namespace smt {
         }
         bool_var var;
         lbool phase = l_undef;
-        m_case_split_queue->next_case_split(var, phase);//在tmp_clause中的所有子句已经满足了的前提下，var是将要选择的变量，phase返回为undef，（其实主要返回的是var，phase总是undef）
+        m_case_split_queue->next_case_split(var, phase);//在tmp_clauses中的所有子句已经满足了的前提下，var是将要选择的变量，phase返回为undef，（其实主要返回的是var，phase总是undef）
 
         if (var == null_bool_var) {//如果var是空的，意味着没有可以选择的变量
             return false;
@@ -1858,7 +1908,7 @@ namespace smt {
         literal l(var, false);//l是var对应的true文字
 
         if (phase != l_undef) {
-            is_pos = phase == l_true;//如果phase不是undef，就判断其是否为true
+            is_pos = phase == l_true;//如果phase不是undef，就判断其是否为true,is_pos用来最后对变量赋值
         }
         else {//phase是undef
             bool_var_data & d = m_bdata[var];
@@ -1932,7 +1982,7 @@ namespace smt {
 
     /**
        \brief Update counter that is used to enable/disable phase caching.
-       更新用来控制phase caching的计数器
+       更新用来控制phase caching的计数器，会在on和off之间反复切换，切换的频率是在参数m_fparams中控制的，在冲突归结找到冲突时调用
     */
     void context::update_phase_cache_counter() {
         m_phase_counter++;
@@ -1956,7 +2006,7 @@ namespace smt {
 
     /**
        \brief Create an internal backtracking point
-       创造中间回退点
+       创造中间回退点,在push，decide,decide_clasue，init_assumption中调用
     */
     void context::push_scope() {
 
@@ -2221,7 +2271,7 @@ namespace smt {
                 }
             }
         }
-        if (!m_units_to_reassert.empty()) {
+        if (!m_units_to_reassert.empty()) {//遍历units_to_reassert中的单元，从new_scope_lvl要reassert的单元开始，一直遍历到最后单元，进行cache_generation
             scope & s   = m_scopes[new_scope_lvl];
             unsigned i  = s.m_units_to_reassert_lim;
             unsigned sz = m_units_to_reassert.size();
@@ -2285,7 +2335,8 @@ namespace smt {
     }
 
     /**
-       \brief See cache_generation(unsigned new_scope_lvl) 在resolve_confict和pop_scope_core中被调用
+       \brief See cache_generation(unsigned new_scope_lvl) 
+       在resolve_confict和pop_scope_core中被调用
     */
     void context::reset_cache_generation() {
         m_cache_generation_visited.reset();
@@ -2414,7 +2465,7 @@ namespace smt {
         CASSERT("reinit_clauses", check_clauses(m_lemmas));
         TRACE("reinit_clauses_bug", display_watch_lists(tout););
     }
-    //在pop_scope_core中被调用，重新断言单元
+    //在pop_scope_core中被调用，重新断言单元，从回退层的units_to_reassert_lim到最后的m_units_to_reassert中的单元子句，重新断言
     void context::reassert_units(unsigned units_to_reassert_lim) {
         unsigned i  = units_to_reassert_lim;
         unsigned sz = m_units_to_reassert.size();
@@ -2440,8 +2491,9 @@ namespace smt {
        is useful because it can be used to detect which boolean variables
        were deleted.
 
-        回溯num_scopes层，在重新初始化子句之前返回布尔变量的数目。该值是有用的，因为它可以用了检测哪个布尔变量被删除了,在resolve conflict和pop_scope中被调用
+       将m_scope层回溯num_scopes层，在重新初始化子句之前返回布尔变量的数目。该值是有用的，因为它可以用了检测哪个布尔变量被删除了,在resolve conflict和pop_scope中被调用
        该方法不会调用reset_cache_generation
+       在pop完成之后会调用reinit_clauses来重新初始化子句
        \warning This method will not invoke reset_cache_generation.
        
     */
@@ -2470,7 +2522,7 @@ namespace smt {
 
             units_to_reassert_lim = s.m_units_to_reassert_lim;
 
-            if (new_lvl < m_base_lvl) {
+            if (new_lvl < m_base_lvl) {//如果new_lvl<base_lvl则说明已经退到之前的base层中
                 base_scope & bs = m_base_scopes[new_lvl];
                 del_clauses(m_lemmas, bs.m_lemmas_lim);
                 m_simp_qhead = bs.m_simp_qhead_lim;
@@ -2490,7 +2542,7 @@ namespace smt {
             m_relevancy_propagator->pop(num_scopes);
 
             m_fingerprints.pop_scope(num_scopes);
-            unassign_vars(s.m_assigned_literals_lim);
+            unassign_vars(s.m_assigned_literals_lim);//把s层之后的所有被赋值的变量全都取消赋值
             undo_trail_stack(s.m_trail_stack_lim);
 
             for (theory* th : m_theory_set) 
@@ -2510,9 +2562,9 @@ namespace smt {
             m_scopes.shrink(new_lvl);
             m_conflict_resolution->reset();
 
-            m_scope_lvl = new_lvl;
+            m_scope_lvl = new_lvl;//把scope_lvl回退
             if (new_lvl < m_base_lvl) {
-                m_base_lvl = new_lvl;
+                m_base_lvl = new_lvl;//这是base_lv唯一赋值的地方，就是如果pop_scope后的新level比base_lvl还低
                 m_search_lvl = new_lvl; // Remark: not really necessary
             }
         }
@@ -2525,20 +2577,20 @@ namespace smt {
         // an exception can happen when axioms are reinitialized (because they are rewritten).
         //意外可能在原子被重新初始化时出现，因为它们被重写了
 
-        unsigned num_bool_vars = get_num_bool_vars();
-        // any variable >= num_bool_vars was deleted during backtracking. 任何变量>=num_bool_vars会在回退中被删除
+        unsigned num_bool_vars = get_num_bool_vars();//num_bool_vars表示 被中间化了的布尔表达式 的数量
+        // any variable >= num_bool_vars was deleted during backtracking. 任何变量>=num_bool_vars会在回退中被删除，?找不到何处会下降num_bool_vars使得变量被删除
         reinit_clauses(num_scopes, num_bool_vars);
         reassert_units(units_to_reassert_lim);
         TRACE("pop_scope_detail", tout << "end of pop_scope: \n"; display(tout););
         CASSERT("context", check_invariant());
         return num_bool_vars;
     }
-    //推出num_scopes层并且重置cache
+    //推出num_scopes层并且重置cache，与pop_scope_core的区别在于有重置cache
     void context::pop_scope(unsigned num_scopes) {
         pop_scope_core(num_scopes);
         reset_cache_generation();
     }
-    //如果当前不在base层就要回退到base层
+    //如果当前不在base层就要回退到base层,在pop，push，check，assert_expr_core，check_preamble中调用
     void context::pop_to_base_lvl() {
         SASSERT(m_scope_lvl >= m_base_lvl);
         if (!at_base_level()) {
@@ -2547,7 +2599,7 @@ namespace smt {
         }
         SASSERT(m_scope_lvl == m_base_lvl);
     }
-    //将m_scope_lvl回退到m_search_lvl
+    //将m_scope_lvl回退到m_search_lvl，也就是去掉guess的部分，无调用
     void context::pop_to_search_lvl() {
         if (m_scope_lvl > get_search_level()) {
             pop_scope(m_scope_lvl - get_search_level());
@@ -2557,7 +2609,7 @@ namespace smt {
     /**
        \brief Simplify the given clause using the assignment.  Return
        true if the clause was already satisfied, and false otherwise.
-        使用赋值来化简给定子句，如果该子句已经被满足了，就返回true，否则返回false，该方法只会在底层使用，在simplify_clauses中被调用
+        使用赋值来化简给定子句，该子句是在lemma或者aux中，如果该子句已经被满足了，就返回true，否则返回false，该方法只会在base层使用，在simplify_clauses中被调用
        \remark This method should only be invoked if we are at the
        base level.
        
@@ -2582,7 +2634,7 @@ namespace smt {
             case l_false:
                 if (m.proofs_enabled())
                     simp_lits.push_back(~l);//如果该文字已经是false的了，就将其放进simp_lits列表中
-                dec_ref(l);
+                dec_ref(l);//降低l的出现次数
                 break;
             case l_true:
                 is_taut = true;//如果已经是true，则本子句已经是true，并且要执行下面的
@@ -2596,7 +2648,7 @@ namespace smt {
             }
         }
 
-        if (j < s) {//如果不是所有的都是非false
+        if (j < s) {//如果不是所有的都是非false，即存在可以删除的false文字
             m_clause_proof.shrink(cls, j);//就把子句给缩减小到j这么大，后面已经是false的部分直接不要了
             cls.set_num_literals(j);
             SASSERT(j >= 2);
@@ -2703,18 +2755,18 @@ namespace smt {
 
     /**
        \brief Simplify the set of clauses if possible (solver is at base level).
-       化简子句集合，仅当在base层才化简，在bounded search和restart中被调用
+       化简lemma和aux子句集合，仅当在base层才化简，在bounded search和restart中被调用
     */
     void context::simplify_clauses() {
         // Remark: when assumptions are used m_scope_lvl >= m_search_lvl > m_base_lvl. Therefore, no simplification is performed.
-        //如果假设不是在base层(m_scope_lvl >= m_search_lvl > m_base_lvl)，则不执行化简
+        //如果假设不是在base层(m_scope_lvl >= m_search_lvl > m_base_lvl)，则不执行化简，化简需要在没有假设没有guess的前提下执行
         if (m_scope_lvl > m_base_lvl)
             return;
 
         unsigned sz = m_assigned_literals.size();
         SASSERT(m_simp_qhead <= sz);
 
-        if (m_simp_qhead == sz || m_simp_counter > 0) {
+        if (m_simp_qhead == sz || m_simp_counter > 0) {//如果再次执行simplify_clauses的开销大，则不执行
             TRACE("simplify_clauses", tout << "m_simp_qhead: " << m_simp_qhead << " m_simp_counter: " << m_simp_counter << "\n";);
             return;
         }
@@ -2738,12 +2790,12 @@ namespace smt {
         //
         // The value of the counter is decremented each time we visit
         // a variable during propagation.
-        //m_simp_counter是用来平衡simplify_clause的开销，在执行完simplify_clauses之后，
-        //该counter会估计再次执行simplify_clauses的开销，也就是需要被访问的文字数,每次我们在传播时访问一个变量，这个counter的值会下降
+        //m_simp_counter 是用来平衡simplify_clause的开销，在执行完simplify_clauses之后，该counter会估计再次执行simplify_clauses的开销，也就是需要被访问的文字数
+        //每次我们在传播时访问一个变量，这个counter的值会下降（开销下降），当simplify_clause后子句尚未满足则要加上子句文字数，也就是这个未满足子句在下一次化简中需要重新计算（开销增加）
         m_simp_counter = 0;
         // the field m_simp_qhead is used to check whether there are
         // new assigned literals at the base level.
-        //m_simp_qhead用来检测是否会有在底层的新赋值文字
+        //m_simp_qhead 用来检测是否会有在base层的新赋值文字
         m_simp_qhead = m_assigned_literals.size();
 
         unsigned num_del_clauses = 0;
@@ -2756,7 +2808,7 @@ namespace smt {
         else {//如果base_lvl不在0层
             scope & s       = m_scopes[m_base_lvl - 1];//通过m_base_lvl找到scope
             base_scope & bs = m_base_scopes[m_base_lvl - 1];
-            num_del_clauses += simplify_clauses(m_aux_clauses, s.m_aux_clauses_lim);//化简子句要根据上述的scope来决定开始编号
+            num_del_clauses += simplify_clauses(m_aux_clauses, s.m_aux_clauses_lim);//化简子句要根据上述的scope来决定开始编号，化简来辅助子句和引理中的子句
             num_del_clauses += simplify_clauses(m_lemmas, bs.m_lemmas_lim);
         }
         m_stats.m_num_del_clauses += num_del_clauses;
@@ -2772,7 +2824,7 @@ namespace smt {
 
     /**
        \brief Delete low activity lemmas
-       删除一些低活跃度的引理,在restart和bounded search中调用，根据参数来选择使用哪种删除引理的方式
+       删除一些低活跃度的引理,在restart和bounded search中调用，根据参数来选择使用哪种删除引理的方式,在bounded search和restart中调用
     */
     inline void context::del_inactive_lemmas() {
         if (m_fparams.m_lemma_gc_strategy == LGC_NONE)
@@ -2875,7 +2927,7 @@ namespace smt {
                 }
                 // A clause is deleted if it has low activity and the number of unknowns is greater than a threshold.
                 // The activity threshold depends on how old the clause is.
-                // 一个子句如果活跃度太低，并且unknowns的数量大于阈值，就会被删除
+                // 一个子句如果活跃度太低，并且unknowns文字的数量大于阈值，就会被删除
                 //活跃度阈值基于该子句有多老
                 unsigned act_threshold = m_fparams.m_old_clause_activity -
                     (m_fparams.m_old_clause_activity - m_fparams.m_new_clause_activity) * ((i - start_at) / real_sz);
@@ -2899,7 +2951,7 @@ namespace smt {
 
     /**
        \brief Return true if "cls" has more than (or equal to) k unassigned literals.
-       逐个检测子句cls中的文字，如果有大于等于k个未赋值的文字，就返回true
+       逐个检测子句cls中的文字，如果有大于等于k个未赋值的文字，就返回true，在删除lemma中使用
     */
     bool context::more_than_k_unassigned_literals(clause * cls, unsigned k) {
         SASSERT(k > 0);
@@ -2940,7 +2992,7 @@ namespace smt {
         return false;
     }
 #endif
-//注册插件，参数是理论，向m_theories中注册该理论，并初始化该理论，依次向th中push_scope
+//注册插件，参数是理论，向m_theories中注册该理论，然后向m_theory_set中添加理论，并初始化该理论，依次向th中push_scope共计m_scope_lvl层
     void context::register_plugin(theory * th) {
         if (m_theories.get_plugin(th->get_family_id()) != nullptr) {
             dealloc(th);
@@ -2977,7 +3029,7 @@ namespace smt {
     bool context::watches_fixed(enode* n) const {
         return m_user_propagator && m_user_propagator->has_fixed() && n->get_th_var(m_user_propagator->get_family_id()) != null_theory_var;
     }
-
+    //在propagate_bool_var_enode中被调用，调用m_user_propogator的new_fixed句柄
     void context::assign_fixed(enode* n, expr* val, unsigned sz, literal const* explain) {
         theory_var v = n->get_th_var(m_user_propagator->get_family_id());
         m_user_propagator->new_fixed_eh(v, val, sz, explain);
@@ -2987,7 +3039,7 @@ namespace smt {
         pop_to_base_lvl();
         setup_context(false);
         bool was_consistent = !inconsistent();
-        internalize_assertions(); // internalize assertions before invoking m_asserted_formulas.push_scope 在调用push_scope之前先中间化断言
+        internalize_assertions(); // internalize assertions before invoking m_asserted_formulas.push_scope 在调用断言公式的push_scope之前先中间化断言
         if (!m.inc())
             throw default_exception("push canceled");
         scoped_suspend_rlimit _suspend_cancel(m.limit());
@@ -3002,11 +3054,11 @@ namespace smt {
         bs.m_lemmas_lim = m_lemmas.size();
         bs.m_inconsistent = inconsistent();
         bs.m_simp_qhead_lim = m_simp_qhead;
-        m_base_lvl++;
+        m_base_lvl++;//这是base唯一可能加1的地方
         m_search_lvl++; // Not really necessary. But, it is useful to enforce the invariant m_search_lvl >= m_base_lvl 并不必要，但是对于迫使保持m_search_lvl >= m_base_lvl 有用
         SASSERT(m_base_lvl <= m_scope_lvl);
     }
-    //在base的基础上推出num_scopes层。先退回到base层，然后pop_scope(num_scopes)
+    //在base的基础上推出num_scopes层。先退回到base层，然后pop_scope(num_scopes),则已经退到之前的base中去了,无调用
     void context::pop(unsigned num_scopes) {
         SASSERT (num_scopes > 0);
         if (num_scopes > m_scope_lvl) return;
@@ -3039,7 +3091,7 @@ namespace smt {
         }
         std::for_each(m_almost_cg_tables.begin(), m_almost_cg_tables.end(), delete_proc<almost_cg_table>());
     }
-    //assert表达式的核心，调用m_asserted_formulas的assert_expr函数，加入断言到公式列表中去
+    //assert表达式的核心，调用m_asserted_formulas的assert_expr函数，加入断言e到公式列表中去，在assert_expr中调用
     void context::assert_expr_core(expr * e, proof * pr) {
         if (get_cancel_flag()) return;
         SASSERT(is_well_sorted(m, e));
@@ -3072,11 +3124,11 @@ namespace smt {
             ctx.undo_th_case_split(l);
         }
     };
-
+    //对lits中的每对文字(l1,l2)，添加(~l1 V ~l2)来强迫lits中最多只有一个文字为真，无调用
     void context::mk_th_case_split(unsigned num_lits, literal * lits) {
         TRACE("theory_case_split", display_literals_verbose(tout << "theory case split: ", num_lits, lits); tout << std::endl;);
-        // If we don't use the theory case split heuristic, 如果不实用理论case split启发式
-        // for each pair of literals (l1, l2) we add the clause (~l1 OR ~l2) 对于每对文字(l1,l2)添加(~l1 V ~l2)来强迫最多只能欧一个文字被赋值为true
+        // If we don't use the theory case split heuristic, 如果不使用理论case split启发式
+        // for each pair of literals (l1, l2) we add the clause (~l1 OR ~l2) 对于每对文字(l1,l2)添加(~l1 V ~l2)来强迫最多只能有一个文字被赋值为true
         // to enforce the condition that at most one literal can be assigned 'true'.
         if (!m_fparams.m_theory_case_split) {
             if (!m.proofs_enabled()) {
@@ -3174,14 +3226,14 @@ namespace smt {
         // if we get here without detecting a conflict, we're fine
         return true;
     }
-    //消除断言的公式，在internalize_assertions中被调用
+    //如果当前的断言公式不是不一致的，消除断言的公式，在internalize_assertions中被调用
     void context::reduce_assertions() {
         if (!m_asserted_formulas.inconsistent()) {
             // SASSERT(at_base_level());
             m_asserted_formulas.reduce();//消除断言的公式
         }
     }
-    //判断是否是有效的假设，在validate_assumptions中被调用
+    //判断是否是有效的假设，假设应该是未被解释的bool变量 在validate_assumptions，internalize_proxies中被调用
     static bool is_valid_assumption(ast_manager & m, expr * a) {
         expr* arg;
         if (!m.is_bool(a))
@@ -3206,7 +3258,7 @@ namespace smt {
             if (is_valid_assumption(m, e)) {//如果asms中的表达式是valid，将其加入到asm2proxy中
                 asm2proxy.push_back(std::make_pair(e, expr_ref(e, m)));
             }
-            else {//如果表达式不是valid，先向m_asserted_formulas中加入一个imply(proxy,e)，然后将(e,proxy)加入到asm2proxy中
+            else {//如果表达式不是valid（即不是未解释的布尔变量），先向m_asserted_formulas中加入一个imply(proxy,e)，然后将(e,proxy)加入到asm2proxy中
                 expr_ref proxy(m), fml(m);
                 proxy = m.mk_fresh_const("proxy", m.mk_bool_sort());
                 fml = m.mk_implies(proxy, e);
@@ -3276,7 +3328,7 @@ namespace smt {
         }
         return true;
     }
-    //初始化子句
+    //初始化子句，在check()中被调用
     void context::init_clause(expr_ref_vector const& _clause) {
         literal_vector lits;
         for (expr* lit : _clause) {//遍历子句中的文字
@@ -3298,12 +3350,13 @@ namespace smt {
     //重制tmp_clause列表，如果tmp_clause中的子句指针存在，就删除指定的子句
     void context::reset_tmp_clauses() {
         for (auto& p : m_tmp_clauses) {
-            if (p.first) del_clause(false, p.first);//如果tmp_clause中的子句指针存在，那就删除给定的子句
+            if (p.first) del_clause(false, p.first);//如果tmp_clause中的子句指针存在，那就删除指定的子句
         }
         m_tmp_clauses.reset();
     }
 
-    //决策子句 在decide()中被调用
+    //决策子句 在decide中被调用
+    //会变量tmp_clauses中的所有子句
     //如果所有子句都已经被满足了，就返回l_true
     //如果存在一个子句已经为false：第一个文字就是false，就返回false，并且设置冲突
     //如果在某个子句中存在未赋值变量就对其赋值，返回l_undef
@@ -3343,7 +3396,7 @@ namespace smt {
         }
         return l_true;
     }
-    //初始化假设
+    //初始化假设，在check()中被调用
     void context::init_assumptions(expr_ref_vector const& asms) {
         reset_assumptions();
         m_literal2assumption.reset();
@@ -3352,7 +3405,7 @@ namespace smt {
             // We must give a chance to the theories to propagate before we create a new scope...
             //必须要先进行理论传播再构造一个新scope
             propagate();
-            // Internal backtracking scopes (created with push_scope()) must only be created when we are 内部回溯scope（随着push_scope()创造的）必须仅在一致状态下被创造
+            // Internal backtracking scopes (created with push_scope()) must only be created when we are 内部回溯层（随着push_scope()创造的）必须仅在一致状态下被创造
             // in a consistent context.
             if (inconsistent())
                 return;
@@ -3360,31 +3413,31 @@ namespace smt {
                 return;
             push_scope();
             vector<std::pair<expr*,expr_ref>> asm2proxy;
-            internalize_proxies(asms, asm2proxy);
-            for (auto const& p: asm2proxy) {
+            internalize_proxies(asms, asm2proxy);//将假设转为代理：asm2proxy
+            for (auto const& p: asm2proxy) {//逐个遍历这些假设
                 if (inconsistent())
                     break;
-                expr_ref curr_assumption = p.second;
-                expr* orig_assumption = p.first;
-                if (m.is_true(curr_assumption)) continue;
-                SASSERT(is_valid_assumption(m, curr_assumption));
+                expr_ref curr_assumption = p.second;//当前假设
+                expr* orig_assumption = p.first;//原假设
+                if (m.is_true(curr_assumption)) continue;//如果当前假设已经是true了，则跳过
+                SASSERT(is_valid_assumption(m, curr_assumption));//当前假设是一个valid的假设
                 proof * pr = m.mk_asserted(curr_assumption);
-                internalize_assertion(curr_assumption, pr, 0);
-                literal l = get_literal(curr_assumption);
+                internalize_assertion(curr_assumption, pr, 0);//中间化断言 当前假设
+                literal l = get_literal(curr_assumption);//获取当前假设对应的文字
                 SASSERT(get_assignment(l) != l_undef);
-                SASSERT(l != false_literal || inconsistent());
-                if (l == true_literal || l == false_literal) {
+                SASSERT(l != false_literal || inconsistent());//l==false_literal-->inconsistent
+                if (l == true_literal || l == false_literal) {//如果当前假设对应的文字是true或者false，则跳过
                     continue;
                 }
                 m_literal2assumption.insert(l.index(), orig_assumption);
-                m_assumptions.push_back(l);
-                get_bdata(l.var()).m_assumption = true;                
+                m_assumptions.push_back(l);//把当前假设对应的文字l 加入assumption中
+                get_bdata(l.var()).m_assumption = true;//设置当前假设对应的文字 是一个assumption                
                 SASSERT(is_relevant(l));
                 TRACE("assumptions", tout << l << ":" << curr_assumption << " " << mk_pp(orig_assumption, m) << "\n";);
             }
         }
-        m_search_lvl = m_scope_lvl;
-        SASSERT(asms.empty() || m_search_lvl > m_base_lvl);
+        m_search_lvl = m_scope_lvl;//将scope赋给search
+        SASSERT(asms.empty() || m_search_lvl > m_base_lvl);//没有假设-->search_lvl>base_lvl
         SASSERT(!asms.empty() || m_search_lvl == m_base_lvl);
         TRACE("after_internalization", display(tout););
     }
@@ -3670,7 +3723,7 @@ namespace smt {
             // introducing proxies: if (!validate_assumptions(asms)) return l_undef; 引入代理：如果clauses子句集中的子句不是valid，则返回undef
             for (auto const& clause : clauses) if (!validate_assumptions(clause)) return l_undef;
             init_assumptions(asms);//初始化assumption
-            for (auto const& clause : clauses) init_clause(clause);//对于每个子句逐个
+            for (auto const& clause : clauses) init_clause(clause);//对于每个子句逐个初始化
             r = search();  //进行搜索 
             r = mk_unsat_core(r);             
         }
@@ -3704,7 +3757,7 @@ namespace smt {
         m_next_progress_sample         = 0;
         TRACE("literal_occ", display_literal_num_occs(tout););
     }
-
+    //结束搜索，调用case_split_queue的end_search_eh句柄，在search中被调用
     void context::end_search() {
         m_case_split_queue->end_search_eh();
     }
@@ -3783,7 +3836,7 @@ namespace smt {
         end_search();
         return status;
     }
-    //重启
+    //重启,在search中调用
     bool context::restart(lbool& status, unsigned curr_lvl) {
         SASSERT(status != l_true || !inconsistent());
 
@@ -3876,7 +3929,7 @@ namespace smt {
         TRACE("bounded_search", tout << "starting bounded search...\n";);
 
         while (true) {
-            while (!propagate()) {//当还不需要用decide操作，并且尚未超出资源
+            while (!propagate()) {//当还不需要用decide操作，目前出现了冲突，并且尚未超出资源
                 TRACE_CODE({
                     static bool first_propagate = true;
                     if (first_propagate) {
@@ -3985,7 +4038,7 @@ namespace smt {
 
         return false;
     }
-    //在完整赋值状态下进行最终检测，相当于检测理论是否可以满足
+    //在完整赋值状态下进行最终检测，相当于检测理论是否可以满足,在bound_search没有可以赋值时调用，在
     final_check_status context::final_check() {
         TRACE("final_check", tout << "final_check inconsistent: " << inconsistent() << "\n"; display(tout); display_normalized_enodes(tout););
         CASSERT("relevancy", check_relevancy());
@@ -4059,7 +4112,7 @@ namespace smt {
             m_last_search_failure = f;
         return result;
     }
-    //检测proof，调用proof_checker.check
+    //检测proof，调用proof_checker.check，在resolve_conflict中验证失败的证明
     void context::check_proof(proof * pr) {
         if (m.proofs_enabled() && m_fparams.m_check_proof) {
             proof_checker pf(m);
@@ -4067,7 +4120,7 @@ namespace smt {
             pf.check(pr, side_conditions);
         }
     }
-    //遗忘当前层的变量的phase，在冲突归结中被调用，将本层赋值的所有文字的phase都设为不可available，即不可获取其值
+    //遗忘当前层的变量的phase，在冲突归结中被调用，将本层赋值的所有文字的phase都设为不可available，即不可获取其值,在resolve_conflict中调用
     void context::forget_phase_of_vars_in_current_level() {
         unsigned head = m_scope_lvl == 0 ? 0 : m_scopes[m_scope_lvl - 1].m_assigned_literals_lim;
         unsigned sz   = m_assigned_literals.size();
@@ -4116,7 +4169,7 @@ namespace smt {
             // be recreated. If that is the case, I store the assertions in
             // a special vector and keep reasserting whenever I backtrack.
             // Moreover, I backtrack only one level.
-            //当文字数为1，则默认行为是回退到base层，如果问题中带有量词，则做该操作可能会很昂贵。
+            //当lemma中文字数为1，则默认行为是回退到base层，如果问题中带有量词，则做该操作可能会很昂贵。
             //如果那样的话，我将断言存在一个特殊数组中，并且每当回退时都重新断言。
             //此外，只回退一层
             bool delay_forced_restart =
@@ -4137,6 +4190,7 @@ namespace smt {
             // comment in cache_generation(unsigned).
             //冲突子句中的一些文字或enode会在回退的过程中被破坏，并且需要被重新创造
             //但是，又想要在它们将要被重新构造时，保持enode的生成号。
+            //这些生成号会被存在m_cached_generation中
             if (m_conflict_resolution->get_lemma_intern_lvl() > new_lvl)
                 cache_generation(num_lits, lits, new_lvl);
 
@@ -4183,16 +4237,16 @@ namespace smt {
             // I invoke pop_scope_core instead of pop_scope because I don't want
             // to reset cached generations... I need them to rebuild the literals
             // of the new conflict clause.
-            //调用了pop_scope_core而不是pop_scope，因为我不想重置cached generations，在重建新冲突子句时需要它们
-            if (relevancy()) record_relevancy(num_lits, lits);
-            unsigned num_bool_vars = pop_scope_core(m_scope_lvl - new_lvl);//回退到new_lvl层
+            //调用了pop_scope_core而不是pop_scope，因为我不想重置cached generations，在重建 新冲突子句 中的 文字 时需要cached_generations
+            if (relevancy()) record_relevancy(num_lits, lits);//将相关性记录下来放在m_relevant_conflict_literals中，在冲突归结期间弹出的scope内，文字可能已被标记为相关。 这个可能会导致量词实例化错过 相关性引发器，并因此导致不一致性
+            unsigned num_bool_vars = pop_scope_core(m_scope_lvl - new_lvl);//**回退到new_lvl层**
             SASSERT(m_scope_lvl == new_lvl);
             // the logical context may still be in conflict after
             // clauses are reinitialized in pop_scope.
             //子句在pop_scope被重新初始化之后，逻辑context可能还是冲突的
             if (m_conflict_resolution->get_lemma_intern_lvl() > m_scope_lvl) {//如果冲突归结的lemma层大于当前层
                 expr * * atoms         = m_conflict_resolution->get_lemma_atoms();
-                for (unsigned i = 0; i < num_lits; i++) {
+                for (unsigned i = 0; i < num_lits; i++) {//遍历lemma中的文字
                     literal l   = lits[i];
                     if (l.var() >= static_cast<int>(num_bool_vars)) {
                         // This boolean variable was deleted during backtracking, it need to be recreated.
@@ -4220,7 +4274,7 @@ namespace smt {
                     }
                 }
             }
-            if (relevancy()) restore_relevancy(num_lits, lits);
+            if (relevancy()) restore_relevancy(num_lits, lits);//恢复相关性
             // Resetting the cache manually because I did not invoke pop_scope, but pop_scope_core 需要手动重置cache，因为没有使用pop_scope
             reset_cache_generation();
             TRACE("resolve_conflict_bug",
@@ -4277,7 +4331,7 @@ namespace smt {
                 SASSERT(num_lits == 1);
                 expr * unit     = bool_var2expr(lits[0].var());
                 bool unit_sign  = lits[0].sign();
-                m_units_to_reassert.push_back(unit);
+                m_units_to_reassert.push_back(unit);//只有在冲突归结resolve_conflict中，lemma中文字数位1，会加入units_to_reassert
                 m_units_to_reassert_sign.push_back(unit_sign);
                 TRACE("reassert_units", tout << "asserting #" << unit->get_id() << " " << unit_sign << " @ " << m_scope_lvl << "\n";);
             }
@@ -4315,7 +4369,7 @@ namespace smt {
       cause incompleteness.
       我们记录并恢复 冲突子句中文字 的相关信息
       在冲突归结期间弹出的scope内，文字可能已被标记为相关。
-      这个可能会导致量词实例化错过 相关性引发器，并因此导致不一致性
+      这个可能会导致量词实例化错过 相关性引发器，并因此导致不一致性，在resolve_conflict中使用
      */
     void context::record_relevancy(unsigned n, literal const* lits) {
         m_relevant_conflict_literals.reset();
@@ -4323,7 +4377,7 @@ namespace smt {
             m_relevant_conflict_literals.push_back(is_relevant(lits[i]));
         }
     }
-    //恢复相关性
+    //恢复相关性，逐个遍历0～n号lits中的文字，如果m_relevant_confliict_literal中被标记了，但是lits中的第i号没有标记，则为lits的相应的位置标记
     void context::restore_relevancy(unsigned n, literal const* lits) {
         for (unsigned i = 0; i < n; ++i) {
             if (m_relevant_conflict_literals[i] && !is_relevant(lits[i])) {
@@ -4364,7 +4418,7 @@ namespace smt {
        If at_lbls is true, then only labels that contains '@' are considered. (This is a hack for Boogie).
        This hack is also available in the Simplify theorem prover.
        收集可能被用来block当前赋值的relevant文字
-       如果at_lbls是true，则只有包含@的标签会被考虑，这个技巧也可以在化简定理证明器中找到。
+       如果at_lbls是true，则只有包含@的标签会被考虑，这个技巧也可以在 化简定理证明器 中找到。
     */
     void context::get_relevant_labeled_literals(bool at_lbls, expr_ref_vector & result) {
         SASSERT(!inconsistent());
@@ -4396,7 +4450,7 @@ namespace smt {
     /**
        \brief Store in result the (relevant) literal assigned by the
        logical context.
-       将逻辑context赋值的（相关）文字存储在结果中。（注意此处只记录了relevant文字）
+       遍历b_internalized_stack(被中间化的布尔表达式栈)中的表达式，将逻辑context赋值的（相关）文字存储在结果result中。（注意此处只记录了relevant文字）无调用
     */
     void context::get_relevant_literals(expr_ref_vector & result) {
         SASSERT(!inconsistent());
@@ -4420,10 +4474,10 @@ namespace smt {
 
     /**
        \brief Store the current set of guessed literals (i.e., case splits).
-       存储猜测文字的当前集合在reuslt中（即case split文字，也就是guessed的文字）
+       存储猜测文字的当前集合在reuslt中（即case split文字，也就是guessed的文字），在search中被调用
     */
     void context::get_guessed_literals(expr_ref_vector & result) {
-        // The literals between [m_base_lvl, m_search_lvl) are not guesses but assumptions.在[m_base_lvl,m_search_lvl)之间层的文字不是guess但是是假设
+        // The literals between [m_base_lvl, m_search_lvl) are not guesses but assumptions.在[m_base_lvl,m_search_lvl)之间层的文字不是guess 而是 假设
         SASSERT(m_base_lvl <= m_scopes.size());
         if (m_search_lvl == m_scopes.size()) {
             // do nothing... there are guesses...
@@ -4452,13 +4506,13 @@ namespace smt {
             ctx.m_bdata[m_var].reset_true_first_flag();
         }
     };
-    //设置变量v的m_true_first为真
+    //设置变量v的m_true_first为真，将set_true_first_trail推进trail中，在assume_eq中调用
     void context::set_true_first_flag(bool_var v) {
         push_trail(set_true_first_trail(v));
         bool_var_data & d = m_bdata[v];
         d.set_true_first_flag();
     }
-    //假设等式lhs和rhs是相等的
+    //假设等式lhs和rhs是相等的,无调用
     bool context::assume_eq(enode * lhs, enode * rhs) {
         if (lhs->get_root() == rhs->get_root())
             return false; // it is not necessary to assume the eq. 如果lhs和rhs的根相同，则不必要假定等式
@@ -4478,8 +4532,8 @@ namespace smt {
             //  (<= (- x y) 0)
             //  (>= (- y x) 0)
             // for the new equality atom (= x y).
-            //不会调用internalize，因为想要在调用理论的internalize_eq_eh之前就先标记try_true_first
-            //原因是：像算术之类的理论应该知道try_true_first是否已经被标记为真了。它们会使用这一信息来为新的等价原子标记如下辅助原子
+            //不会调用internalize，因为想要在调用理论的internalize_eq_eh之前 就先标记try_true_first
+            //原因是：像算术之类的理论应该知道try_true_first是否已经被标记为真了。它们会使用这一信息来 为新的 等价原子标记 如下辅助原子
             if (m.is_eq(eq)) {
                 internalize_formula_core(to_app(eq), true);
                 bool_var v        = get_bool_var(eq);
@@ -4518,7 +4572,7 @@ namespace smt {
         TRACE("assume_eq", tout << "assume_eq result: " << r << "\n";);
         return r;
     }
-    //判断一个enode n是否是被共享的，如果n的等价类包含一个父应用，则该变量是被共享的
+    //判断一个enode n是否是被共享的，如果n的等价类包含一个父应用，则该变量是被共享的,未调用
     bool context::is_shared(enode * n) const {
         n = n->get_root();
         unsigned num_th_vars = n->get_num_th_vars();
@@ -4584,7 +4638,7 @@ namespace smt {
             return true;
         }
     }
-    //获得enode n在相应的理论中的value
+    //获得enode n在相应的理论中的value，调用相关理论的get_value方法
     bool context::get_value(enode * n, expr_ref & value) {
         sort * s      = m.get_sort(n->get_owner());
         family_id fid = s->get_family_id();
@@ -4607,9 +4661,9 @@ namespace smt {
         }
         return false;
     }
-
+    //为m_model用m_model_generator构造一个新的值，在get_model，restart,final_check中调用
     void context::mk_proto_model() {
-        if (m_model || m_proto_model || has_case_splits()) return;
+        if (m_model || m_proto_model || has_case_splits()) return;//如果model已经存在就直接返回
         TRACE("get_model",
               display(tout);
               display_normalized_enodes(tout);
@@ -4617,11 +4671,11 @@ namespace smt {
               m_fingerprints.display(tout);
               );
         failure fl = get_last_search_failure();
-        if (fl == MEMOUT || fl == CANCELED || fl == NUM_CONFLICTS || fl == RESOURCE_LIMIT) {
+        if (fl == MEMOUT || fl == CANCELED || fl == NUM_CONFLICTS || fl == RESOURCE_LIMIT) {//如果失败信息存在这些情况就先打印之前的失败信息
             TRACE("get_model", tout << "last search failure: " << fl << "\n";);   
         }     
         else if (m_fparams.m_model || m_fparams.m_model_on_final_check || 
-                 (m_qmanager->has_quantifiers() && m_qmanager->model_based())) {
+                 (m_qmanager->has_quantifiers() && m_qmanager->model_based())) {//如果不存在上述错误信息，并且满足如下情况，就产生一个m_proto_model
             m_model_generator->reset();
             m_proto_model = m_model_generator->mk_model();
             m_qmanager->adjust_model(m_proto_model.get());
@@ -4649,7 +4703,7 @@ namespace smt {
         }
         return false;
     }
-//获取model到model ref中，在check_final中被使用
+    //获取model到model ref中，在check_final中被使用
     void context::get_model(model_ref & mdl) {
         if (inconsistent()) 
             mdl = nullptr;
@@ -4671,7 +4725,7 @@ namespace smt {
             mdl = m_model.get();
         }
     }
-    //遍历所有的变量，将每个变量的赋值层数放在depth数组中，如果变量为null_bool_var，则为其设置为MAX
+    //遍历所有的变量，将每个变量的赋值层数放在depth数组中，如果变量为null_bool_var，则为其设置为MAX,无调用
     void context::get_levels(ptr_vector<expr> const& vars, unsigned_vector& depth) {
         unsigned sz = vars.size(); 
         depth.resize(sz);
@@ -4681,17 +4735,17 @@ namespace smt {
             depth[i] = bv == null_bool_var ? UINT_MAX : get_assign_level(bv);            
         }
     }
-    //获取当前部分赋值的迹
+    //获取当前部分赋值的迹，无调用
     expr_ref_vector context::get_trail() {        
         expr_ref_vector result(get_manager());
         get_assignments(result);
         return result;
     }
-
+    //获取最后一次失败原因，在mk_proto_model中被调用
     failure context::get_last_search_failure() const {
         return m_last_search_failure;
     }
-    //向model中加入rec_funs
+    //向model中加入rec_funs,在get_model中被调用
     void context::add_rec_funs_to_model() {
         if (!m_model) return;
         recfun::util u(m);
