@@ -221,9 +221,9 @@ namespace smt {
  
     /**
        \brief Internalize an expression asserted into the logical context using the given proof as a justification.
-       
+       中间化一个被断言进逻辑context的表达式，运用给定的证明作为验证，如果不使用proof则pr==0
        \remark pr is 0 if proofs are disabled.
-       中间化一个被断言进逻辑context的表达式，运用给定的证明作为验证
+       
     */
     void context::internalize_assertion(expr * n, proof * pr, unsigned generation) {
         TRACE("internalize_assertion", tout << mk_pp(n, m) << "\n";); 
@@ -293,18 +293,21 @@ namespace smt {
             assert_default(n, pr);
         }
     }
-
+    //断言的公式中就是单元子句
     void context::assert_default(expr * n, proof * pr) {
         internalize(n, true);
         literal l = get_literal(n);
-        if (l == false_literal) {
+        if (l == false_literal) {//如果断言中的单元子句本身就已经被赋值为false，则需要设置冲突
             set_conflict(mk_justification(justification_proof_wrapper(*this, pr)));
         }
-        else {
+        else {//需要首先向子句列表中加入相应的子句，然后进行赋值
             justification* j = mk_justification(justification_proof_wrapper(*this, pr));
             m_clause_proof.add(l, CLS_AUX, j);
             assign(l, j);
             mark_as_relevant(l);
+            std::cout<<"( ";
+            if(l.sign())std::cout<<" - ";
+            std::cout<<l.var()<<" )\n";//打印断言中的单元子句!!
         }
     }
 
@@ -1109,6 +1112,17 @@ namespace smt {
        
        It is safe to use the current assignment to simplify aux
        clauses because they are deleted during backtracking.
+       化简一个辅助子句的文字，一个辅助子句是转瞬即逝的。
+       因此当前赋值可以用来作为化简
+
+       会采用如下的化简规则：
+       重复会被删除
+       已经被赋值为false的会被删除
+       如果l和～l同时存在，则返回false，因为该子句已经为true
+       如果一个文字已经在源中被赋值为true，则返回false
+
+       被删除的文字被存在了simp_lits中
+       使用当前赋值来化简辅助子句是安全的，因为他们会在回退的过程中被删除
     */
     bool context::simplify_aux_clause_literals(unsigned & num_lits, literal * lits, literal_buffer & simp_lits) {
         TRACE("simplify_aux_clause_literals", display_literals(tout, num_lits, lits); tout << "\n";);
@@ -1122,11 +1136,11 @@ namespace smt {
             case l_false:
                 TRACE("simplify_aux_clause_literals", display_literal_verbose(tout << get_assign_level(curr) << " " << get_scope_level() << " " << curr << ":", curr); tout << "\n"; );
                 simp_lits.push_back(~curr);
-                break; // ignore literal                
+                break; // ignore literal      跳过该false文字          
                 // fall through
             case l_undef:
                 if (curr == ~prev)
-                    return false; // clause is equivalent to true
+                    return false; // clause is equivalent to true 当前子句已经是true，因为l和～l同时存在
                 if (curr != prev) {
                     prev = curr;
                     if (i != j)
@@ -1135,7 +1149,7 @@ namespace smt {
                 }
                 break;
             case l_true:
-                return false; // clause is equivalent to true
+                return false; // clause is equivalent to true  当前子句已经是true
             }
         }
         num_lits = j;
@@ -1361,20 +1375,22 @@ namespace smt {
     /**
        \brief Create a new clause using the given literals, justification, kind and deletion event handler.
        The deletion event handler is ignored if binary clause optimization is applicable.
+       用给定的文字，证明，类型，删除事件句柄来构造一个新的子句
+       如果使用了二元子句优化，则删除事件句柄被忽视
     */
     clause * context::mk_clause(unsigned num_lits, literal * lits, justification * j, clause_kind k, clause_del_eh * del_eh) {
         TRACE("mk_clause", display_literals_verbose(tout << "creating clause: " << literal_vector(num_lits, lits) << "\n", num_lits, lits) << "\n";);
         m_clause_proof.add(num_lits, lits, k, j);
-        switch (k) {
+        switch (k) {//此处k==0，进入cls_aux和cls_th_axiom处理
         case CLS_AUX: 
         case CLS_TH_AXIOM: {
-            literal_buffer simp_lits;
-            if (!simplify_aux_clause_literals(num_lits, lits, simp_lits)) {
+            literal_buffer simp_lits;//记录被删除的子句
+            if (!simplify_aux_clause_literals(num_lits, lits, simp_lits)) {//化简子句，将化简后的子句存在lits中
                 if (j && !j->in_region()) {
                     j->del_eh(m);
                     dealloc(j);
                 }
-                return nullptr; // clause is equivalent to true;
+                return nullptr; // clause is equivalent to true;当前子句已经是true了，则返回空指针
             }
             DEBUG_CODE(for (literal lit : simp_lits) SASSERT(get_assignment(lit) == l_true););
             if (!simp_lits.empty()) {
@@ -1412,11 +1428,11 @@ namespace smt {
         case 1:
             if (j && !j->in_region())
                 m_justifications.push_back(j);
-            assign(lits[0], j);
+            assign(lits[0], j);//单元子句直接赋值
             inc_ref(lits[0]);
             return nullptr;
         case 2:
-            if (use_binary_clause_opt(lits[0], lits[1], lemma)) {
+            if (use_binary_clause_opt(lits[0], lits[1], lemma)) {//二元子句会直接返回空指针
                 literal l1 = lits[0];
                 literal l2 = lits[1];
                 inc_ref(l1);
@@ -1431,14 +1447,14 @@ namespace smt {
                 return nullptr;
             }
             Z3_fallthrough;
-        default: {
+        default: {//多元子句
             m_stats.m_num_mk_clause++;
             unsigned iscope_lvl = lemma ? get_max_iscope_lvl(num_lits, lits) : 0;
             SASSERT(m_scope_lvl >= iscope_lvl);
             bool save_atoms     = lemma && iscope_lvl > m_base_lvl;
             bool reinit         = save_atoms;
             SASSERT(!lemma || j == 0 || !j->in_region());
-            clause * cls = clause::mk(m, num_lits, lits, k, j, del_eh, save_atoms, m_bool_var2expr.c_ptr());
+            clause * cls = clause::mk(m, num_lits, lits, k, j, del_eh, save_atoms, m_bool_var2expr.c_ptr());//如果是多元子句，就在这儿构造一个新子句
             m_clause_proof.add(*cls);
             if (lemma) {
                 cls->set_activity(activity);
@@ -1573,7 +1589,7 @@ namespace smt {
     }
 
     void context::mk_root_clause(unsigned num_lits, literal * lits, proof * pr) {
-        if (m.proofs_enabled()) {
+        if (m.proofs_enabled()) {//该例子中不使用proof
             SASSERT(m.get_fact(pr));
             expr * fact = m.get_fact(pr);
             if (!m.is_or(fact)) {
@@ -1586,7 +1602,13 @@ namespace smt {
             mk_clause(num_lits, lits, mk_justification(justification_proof_wrapper(*this, pr)));
         }
         else {
-            mk_clause(num_lits, lits, nullptr);
+            clause *new_cl= mk_clause(num_lits, lits, nullptr);//初始化在此处构造子句
+            std::cout<<"( ";
+            for(int i=0;i<num_lits;i++){
+                if(lits[i].sign()) std::cout<<"- ";
+                std::cout<<lits[i].var()<<" ";
+            }//打印断言中的子句!!
+            std::cout<<")"<<std::endl;
         }
     }
 

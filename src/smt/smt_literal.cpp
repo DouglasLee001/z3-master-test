@@ -21,7 +21,7 @@ Revision History:
 #include "ast/ast_ll_pp.h"
 
 namespace smt {
-
+    //展开打印文字
     void literal::display(std::ostream & out, ast_manager & m, expr * const * bool_var2expr_map) const {
         if (*this == true_literal)
             out << "true";
@@ -30,7 +30,7 @@ namespace smt {
         else if (*this == null_literal)
             out << "null";
         else if (sign())
-            out << "(not " << mk_bounded_pp(bool_var2expr_map[var()], m, 3) << ")";
+            out << "( not " << mk_bounded_pp(bool_var2expr_map[var()], m, 3) << " )";
         else
             out << mk_bounded_pp(bool_var2expr_map[var()], m, 3);
     }
@@ -83,7 +83,7 @@ namespace smt {
             lits[i].display_compact(out, bool_var2expr_map);
         }
     }
-
+    //可以打印出文字对应的表达式形式，可以展开表示 如：(<= 3 (- a b))
     void display_verbose(std::ostream & out, ast_manager& m, unsigned num_lits, literal const * lits, expr * const * bool_var2expr_map, char const* sep) {
         for (unsigned i = 0; i < num_lits; i++) {
             if (i > 0)

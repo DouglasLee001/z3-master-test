@@ -172,7 +172,7 @@ namespace smt {
         unsigned_vector             m_lit_occs;    //!< occurrence count of literals
         svector<bool_var_data>      m_bdata;       //!< mapping bool_var -> data
         svector<double>             m_activity;
-        clause_vector               m_aux_clauses;//辅助子句
+        clause_vector               m_aux_clauses;//辅助子句,含义就是除了二元单元子句之外的公式对应的子句
         clause_vector               m_lemmas;//加入的引理
         vector<clause_vector>       m_clauses_to_reinit;
         expr_ref_vector             m_units_to_reassert;//当lemma中文字数为1，则默认行为是回退到base层，如果问题中带有量词，则做该操作可能会很昂贵。如果那样的话，我将断言存在一个特殊数组中，并且每当回退时都重新断言。此外，只回退一层
@@ -502,7 +502,7 @@ namespace smt {
         bool tracking_assumptions() const {
             return !m_assumptions.empty() && m_search_lvl > m_base_lvl;
         }
-
+        //由布尔变量可以找到相应的表达式
         expr * bool_var2expr(bool_var v) const {
             return m_bool_var2expr[v];
         }

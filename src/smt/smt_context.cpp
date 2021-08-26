@@ -3271,7 +3271,8 @@ namespace smt {
         internalize_assertions();
     }
 
-    //中间化assertion，如果断言的公式是一致的，就遍历所有公式并中间化该子句，如果存在不一致，就要调用asserted_inconsistent来设置冲突
+    //中间化assertion,将其转换为子句，如果断言的公式是一致的，就遍历所有公式并中间化该子句
+    //如果存在不一致，就要调用asserted_inconsistent来设置冲突，会在初始化assertion部分调用，构造子句
     void context::internalize_assertions() {
         if (get_cancel_flag()) return;
         TRACE("internalize_assertions", tout << "internalize_assertions()...\n";);
@@ -3286,7 +3287,7 @@ namespace smt {
                     m_asserted_formulas.commit(qhead);
                     return;
                 }
-                expr * f   = m_asserted_formulas.get_formula(qhead);//获得位列qhead号的公式
+                expr * f   = m_asserted_formulas.get_formula(qhead);//获得位列qhead号的公式,是一个表达式
                 proof * pr = m_asserted_formulas.get_formula_proof(qhead);//获得位列qhead号的证明
                 SASSERT(!pr || f == m.get_fact(pr));
                 internalize_assertion(f, pr, 0);//中间化该子句
@@ -3620,6 +3621,7 @@ namespace smt {
        and before internalizing any formulas.
        基于当前的已断言的公式来设置逻辑context，并且执行check命令
        逻辑context只能在scope 0级 并且 在internalizing任何公式之前 才能被配置
+       此处是入口函数!!
     */
     lbool context::setup_and_check(bool reset_cancel) {
         if (!check_preamble(reset_cancel)) return l_undef;
@@ -3633,15 +3635,17 @@ namespace smt {
             return p(asms);
         }
 
-        internalize_assertions();
+        internalize_assertions();//此处中间化断言，形成子句
         expr_ref_vector theory_assumptions(m);
         add_theory_assumptions(theory_assumptions);
         if (!theory_assumptions.empty()) {//理论assumption不为空
             TRACE("search", tout << "Adding theory assumptions to context" << std::endl;);
             return check(0, nullptr, reset_cancel);
         }
-        else {//如果理论assumption为空
+        else {//如果理论assumption为空,例子会进入此处
             TRACE("before_search", display(tout););
+            display_expr_bool_var_map(std::cout);//在搜索开始之前打印bool变量和表达式的对应关系
+            display_assignment(std::cout);//在搜索开始之前先获取已经单元传播赋值的部分bool变量
             return check_finalize(search());
         }
     }

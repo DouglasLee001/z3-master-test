@@ -349,7 +349,7 @@ void asserted_formulas::display_ll(std::ostream & out, ast_mark & pp_visited) co
             ast_def_ll_pp(out, m, f.get_fml(), pp_visited, true, false);
         out << "asserted formulas:\n";
         for (justified_expr const& f : m_formulas)
-            out << "#" << f.get_fml()->get_id() << " ";
+            out << "#" << f.get_fml()->get_id() << " ";//逐个打印公式中的子句
         out << "\n";
     }
 }

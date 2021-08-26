@@ -59,6 +59,14 @@ namespace smt {
         The logical context uses the method is_attached_to_var
         to decide whether an enode is already associated with a theory 
         variable or not.
+        在逻辑context中，表达式被中间化了。
+        也就是说，逻辑context构造了辅助数据结构(enode)并将其与表达式相关联。
+        逻辑context并不知道每个理论的内部构件
+        所以，在内化过程中，它会提醒理论插件，它何时找到了一个带有理论函数符号的app
+
+        一个在n层被创造的理论变量，必须在当n层被回溯的时候被删除
+
+        逻辑context使用了is_attched_to_var来确定一个enode是否已经关联了一个理论变量
 
         ------------------------------------------------------ */
 

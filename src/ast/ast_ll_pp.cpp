@@ -282,7 +282,7 @@ public:
         unsigned num_args = to_app(n)->get_num_args();
         
         if (num_args > 0) 
-            m_out << "(";
+            m_out << "( ";
         display_name(to_app(n)->get_decl());
         display_params(to_app(n)->get_decl());
         for (unsigned i = 0; i < num_args && i < 16; i++) {
@@ -292,7 +292,7 @@ public:
         if (num_args >= 16) 
             m_out << " ...";
         if (num_args > 0)
-            m_out << ")";
+            m_out << " )";
     }
 
     void display_bounded(ast * n, unsigned depth) {

@@ -154,6 +154,7 @@ namespace smt {
     void context::display_bool_var_defs(std::ostream & out) const {
         unsigned num = get_num_bool_vars();
         for (unsigned v = 0; v < num; v++) {
+            std::cout<<"var_def\n";
             expr * n = m_bool_var2expr[v];
             ast_def_ll_pp(out, m, n, get_pp_visited(), true, false);
         }
@@ -196,12 +197,12 @@ namespace smt {
     std::ostream& context::display_binary_clauses(std::ostream & out) const {
         unsigned l_idx = 0;
         for (watch_list const& wl : m_watches) {
-            literal l1 = to_literal(l_idx++);
-            literal neg_l1 = ~l1;
+            literal l1 = to_literal(l_idx++);//l1是第l_idx号文字
+            literal neg_l1 = ~l1;//打印l1的非
             literal const * it2  = wl.begin_literals();
             literal const * end2 = wl.end_literals();
-            for (; it2 != end2; ++it2) {
-                literal l2 = *it2;
+            for (; it2 != end2; ++it2) {//遍历watch list中的所有文字
+                literal l2 = *it2;//l2是watch list中的文字
                 if (l1.index() < l2.index()) {
                     out << "(" << neg_l1 << " " << l2 << ")\n";
 #if 0
@@ -221,6 +222,8 @@ namespace smt {
         if (!m_assigned_literals.empty()) {
             out << "current assignment:\n";
             for (literal lit : m_assigned_literals) {
+                if(lit.sign())std::cout<<" - ";
+                std::cout<<lit.var()<<" ";
                 display_literal(out, lit);
                 if (!is_relevant(lit)) out << " n ";
                 out << ": ";
@@ -270,8 +273,9 @@ namespace smt {
             out << "\n";
         }
     }
-
+    //打印从 表达式 到 bool变量的映射 ， 可以打印出抽象化之后，表达式->布尔变量， 即变量对应关系
     void context::display_expr_bool_var_map(std::ostream & out) const {
+        std::string myString;
         if (!m_b_internalized_stack.empty()) {
             out << "expression -> bool_var:\n";
             unsigned sz = m_b_internalized_stack.size();
@@ -279,9 +283,17 @@ namespace smt {
                 expr *  n  = m_b_internalized_stack.get(i);
                 bool_var v = get_bool_var_of_id(n->get_id());
                 out << "(#" << n->get_id() << " -> " << literal(v, false) << ") ";
+                literal l_curr=get_literal(n);
+                out<<l_curr.var()<<" ";
+                l_curr.display(out,m,m_bool_var2expr.c_ptr());//打印出bool变量对应的表达式，用空格分开
+                out<<"\n";
+                std::stringstream ss;
+                l_curr.display(ss,m,m_bool_var2expr.c_ptr());//将布尔变量对应的表达式存放在string中
+                myString=ss.str();
             }
             out << "\n";
         }
+        
     }
 
     void context::display_hot_bool_vars(std::ostream & out) const {
@@ -326,8 +338,8 @@ namespace smt {
         out << "m_asserted_formulas.inconsistent(): " << m_asserted_formulas.inconsistent() << "\n";
         display_bool_var_defs(out);
         display_enode_defs(out);
-        display_asserted_formulas(out);
-        display_binary_clauses(out);
+        display_asserted_formulas(out);//打印已经断言的公式!!!
+        display_binary_clauses(out);//打印二元子句 (1,2)
         if (!m_aux_clauses.empty()) {
             out << "auxiliary clauses:\n";
             display_clauses(out, m_aux_clauses);
@@ -336,14 +348,14 @@ namespace smt {
             out << "lemmas:\n";
             display_clauses(out, m_lemmas);
         }
-        display_assignment(out);
+        display_assignment(out);//获取当前赋值!!!
         display_eqc(out);
         m_cg_table.display_compact(out);
         m_case_split_queue->display(out);
-        display_expr_bool_var_map(out);
-        display_app_enode_map(out);
+        display_expr_bool_var_map(out);//打印变量对应表达式的关系!!!
+        display_app_enode_map(out);//打印从表达式到enode的映射
         display_relevant_exprs(out);
-        display_theories(out);
+        display_theories(out);//此处调用理论的th->display_atoms可以打印理论原子
         display_decl2enodes(out);
         display_hot_bool_vars(out);
     }
