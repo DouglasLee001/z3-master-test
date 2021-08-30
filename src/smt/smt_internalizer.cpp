@@ -29,6 +29,7 @@ namespace smt {
     /**
        \brief Return true if the expression is viewed as a logical gate.
        如果该表达式被看成是一个逻辑门，则返回true
+       当表达式n的decl_kind为AND，OR，ITE或EQ中n是bool类型，是逻辑门，其他的不是逻辑门
     */
     static bool is_gate(ast_manager const & m, expr * n) {
         if (is_app(n) && to_app(n)->get_family_id() == m.get_basic_family_id()) {
@@ -49,7 +50,7 @@ namespace smt {
 #define White 0
 #define Grey  1
 #define Black 2
-    
+    //在topo_sort_expr和ts_visit_child中调用
     static char get_color(char_vector & tcolors, char_vector & fcolors, expr * n, bool gate_ctx) {
         char_vector & colors = gate_ctx ? tcolors : fcolors;
         if (colors.size() > n->get_id())
@@ -71,6 +72,9 @@ namespace smt {
        - a
        - (f b)
        - (h (+ c d))
+       返回n的外部派生物，即其family_id不同于fid的 n的派生物
+       例如：(+ a (+ (f b) (* 2 (h (+ c d)))))的派生物是。。。
+       在ts_visit_children中被调用
     */
     static void get_foreign_descendants(app * n, family_id fid, ptr_buffer<expr> & descendants) {
         SASSERT(n->get_family_id() == fid);
@@ -106,7 +110,7 @@ namespace smt {
             visited = false;
         }
     }
-
+    //在top_sort_expr中被调用
     bool context::ts_visit_children(expr * n, bool gate_ctx, svector<expr_bool_pair> & todo) {
         if (is_quantifier(n))
             return true;
@@ -152,7 +156,7 @@ namespace smt {
         }
         return visited;
     }
-
+    //在internalize_deep中调用，拓扑排序
     void context::top_sort_expr(expr* const* exprs, unsigned num_exprs, svector<expr_bool_pair> & sorted_exprs) {
         tcolors.reset();
         fcolors.reset();
@@ -190,7 +194,7 @@ namespace smt {
             to_app(e)->get_family_id() == null_family_id || 
             to_app(e)->get_family_id() == m.get_basic_family_id();
     }
-
+    //在internalize和internalize_assertion中调用
     void context::internalize_deep(expr* const* exprs, unsigned num_exprs) {
         ts_todo.reset();
         for (unsigned i = 0; i < num_exprs; ++i) {
@@ -200,15 +204,17 @@ namespace smt {
                 // stack overflow.
                 // a caveat is that theory internalizers do rely on recursive descent so
                 // internalization over these follows top-down
+                // 如果表达式是深的，则执行拓扑排序来避免栈溢出
+                //一个警告是：理论internalizer依赖于递归下降，所以internalization基于自顶向下
                 TRACE("deep_internalize", tout << "expression is deep: #" << n->get_id() << "\n" << mk_ll_pp(n, m););
                 ts_todo.push_back(expr_bool_pair(n, true));
             }
         }
 
         svector<expr_bool_pair> sorted_exprs;
-        top_sort_expr(exprs, num_exprs, sorted_exprs);
+        top_sort_expr(exprs, num_exprs, sorted_exprs);//拓扑排序
         TRACE("deep_internalize", for (auto & kv : sorted_exprs) tout << "#" << kv.first->get_id() << " " << kv.second << "\n"; );
-        for (auto & kv : sorted_exprs) {
+        for (auto & kv : sorted_exprs) {//排序好的表达式，逐个internalize_rec
             expr* e = kv.first;
             SASSERT(should_internalize_rec(e));
             internalize_rec(e, kv.second);
@@ -222,6 +228,7 @@ namespace smt {
     /**
        \brief Internalize an expression asserted into the logical context using the given proof as a justification.
        中间化一个被断言进逻辑context的表达式，运用给定的证明作为验证，如果不使用proof则pr==0
+       在context.cpp中的internalize_assertions，init_assumptions中调用，在internalize_instance中调用，以及smt_model_checker的assert_new_instances中调用
        \remark pr is 0 if proofs are disabled.
        
     */
@@ -233,10 +240,10 @@ namespace smt {
         flet<unsigned> l(m_generation, generation);
         m_stats.m_max_generation = std::max(m_generation, m_stats.m_max_generation);
         internalize_deep(n);
-        SASSERT(m.is_bool(n));
-        if (is_gate(m, n)) {
+        SASSERT(m.is_bool(n));//确保表达式n是bool类型
+        if (is_gate(m, n)) {//当n是AND，OR，EQ（仅等式），ITE时
             switch(to_app(n)->get_decl_kind()) {
-            case OP_AND: {
+            case OP_AND: {//如果是and，则逐个internalize其中的各个表达式，并添加相应的子句
                 for (expr * arg : *to_app(n)) {
                     internalize_rec(arg, true);
                     literal lit = get_literal(arg);
@@ -244,7 +251,7 @@ namespace smt {
                 }
                 break;
             }
-            case OP_OR: {
+            case OP_OR: {//如果是OR则逐个遍历包含的文字，将其加到lits中，再将lits构成子句
                 literal_buffer lits;
                 for (expr * arg : *to_app(n)) { 
                     internalize_rec(arg, true);
@@ -254,7 +261,7 @@ namespace smt {
                 add_or_rel_watches(to_app(n));
                 break;
             }
-            case OP_EQ: {
+            case OP_EQ: {//如果是等式，则找到等式左右的两个表达式对应的文字l1，l2，加入2个子句l1->l2,l2->l1
                 expr * lhs = to_app(n)->get_arg(0);
                 expr * rhs = to_app(n)->get_arg(1);
                 internalize_rec(lhs, true);
@@ -265,7 +272,7 @@ namespace smt {
                 mk_root_clause(~l1, l2, pr);
                 break;
             }
-            case OP_ITE: {
+            case OP_ITE: {//ITE,找到条件c和2个后果t和e对应的表达式，分别内化，然后加入2个子句，c->t, ~c->e
                 expr * c = to_app(n)->get_arg(0);
                 expr * t = to_app(n)->get_arg(1);
                 expr * e = to_app(n)->get_arg(2);
@@ -285,11 +292,11 @@ namespace smt {
             }
             mark_as_relevant(n);
         }
-        else if (m.is_distinct(n)) {
+        else if (m.is_distinct(n)) {//如果n是不等式，则调用assert_distinct
             assert_distinct(to_app(n), pr);
             mark_as_relevant(n);
         }
-        else {
+        else {//默认是单元子句
             assert_default(n, pr);
         }
     }
@@ -312,7 +319,7 @@ namespace smt {
     }
 
 #define DISTINCT_SZ_THRESHOLD 32
-
+    //在internalize_assertion中被调用，即a!=b时使用,会先构造一个等式，然后将其标记为相关的
     void context::assert_distinct(app * n, proof * pr) {
         TRACE("assert_distinct", tout << mk_pp(n, m) << "\n";);
         unsigned num_args = n->get_num_args();
@@ -328,9 +335,9 @@ namespace smt {
             app_ref val(m.mk_fresh_const("unique-value", u), m);
             enode * e   = mk_enode(val, false, false, true);
             e->mark_as_interpreted();
-            app_ref eq(m.mk_eq(fapp, val), m);
+            app_ref eq(m.mk_eq(fapp, val), m);//构造一个等式
             TRACE("assert_distinct", tout << "eq: " << mk_pp(eq, m) << "\n";);
-            assert_default(eq, nullptr);
+            assert_default(eq, nullptr);//断言一个等式是relevant，表示是不等式，先标记为相关的，然后再相关性传播
             mark_as_relevant(eq.get());
             // TODO: we may want to hide the auxiliary values val and the function f from the model.
         }
@@ -350,7 +357,9 @@ namespace smt {
 
     /**
        \brief Internalize the given expression into the logical context.
-       中间化给定表达式 到逻辑context中，gate_ctx是true表示：表达式在逻辑门的context中
+       中间化给定表达式 到逻辑context中，gate_ctx是true表示：表达式在逻辑门的context中。相当于为每个表达式n调用internalize_rec
+       先调用internalzie_deep再调用internalize_rec
+       会在assert_default和ensure_internalize中调用
        
        - gate_ctx is true if the expression is in the context of a logical gate.
     */
@@ -365,44 +374,45 @@ namespace smt {
             internalize_rec(exprs[i], gate_ctx);
         }
     }
-
+    //对于一个bool类型的表达式internalize_formula，对于lambda，internalize_lambda，否则internalize_term
     void context::internalize_rec(expr * n, bool gate_ctx) {
         TRACE("internalize", tout << "internalizing:\n" << mk_pp(n, m) << "\n";);
         TRACE("internalize_bug", tout << "internalizing:\n" << mk_bounded_pp(n, m) << "\n";);
         if (is_var(n)) {
             throw default_exception("Formulas should not contain unbound variables");
-        }
+        }//如果n是变量，则要抛出异常，公式中不能包含未定界变量
         if (m.is_bool(n)) {
             SASSERT(is_quantifier(n) || is_app(n));
             internalize_formula(n, gate_ctx);
-        }
+        }//如果n是布尔类型，就调用internalize_formula
         else if (is_lambda(n)) {
             internalize_lambda(to_quantifier(n));
-        }
+        }//如果是lambda，则internalize_lambda
         else {
             SASSERT(is_app(n));
             SASSERT(!gate_ctx);
             internalize_term(to_app(n));
-        }
+        }//如果不满足上述类型，就internalize_term
     }
 
     /**
        \brief Internalize the given formula into the logical context.
+       将给定公式内化进逻辑context中，会在internalize_rec和smt_context的init_clause中被调用
     */
     void context::internalize_formula(expr * n, bool gate_ctx) {
         TRACE("internalize_bug", tout << "internalize formula: #" << n->get_id() << ", gate_ctx: " << gate_ctx << "\n" << mk_pp(n, m) << "\n";);
-        SASSERT(m.is_bool(n));
+        SASSERT(m.is_bool(n));//需要确保n本身是bool类型
         if (m.is_true(n) || m.is_false(n))
             return;
 
-        if (m.is_not(n) && gate_ctx) {
+        if (m.is_not(n) && gate_ctx) {//如果n，NOT门，是在门的context中，则一个布尔变量不需要创造
             // a boolean variable does not need to be created if n a NOT gate is in
             // the context of a gate.
             internalize_rec(to_app(n)->get_arg(0), true);
             return;
         }
 
-        if (b_internalized(n)) {
+        if (b_internalized(n)) {//如果n已经被内化为boolean了
             // n was already internalized as a boolean.
             bool_var v = get_bool_var(n);
             TRACE("internalize_bug", tout << "#" << n->get_id() << " already has bool_var v" << v << "\n";);
@@ -410,18 +420,19 @@ namespace smt {
             // n was already internalized as boolean, but an enode was
             // not associated with it.  So, an enode is necessary, if
             // n is not in the context of a gate and is an application.
+            //n已经被内化为布尔，但是enode没有关联它。所以，如果n不在门的context中，并且n是一个app，则enode是必须要和它关联的
             if (!gate_ctx && is_app(n)) {
-                if (e_internalized(n)) {
+                if (e_internalized(n)) {//n已经被internalize为enode了
                     TRACE("internalize_bug", tout << "forcing enode #" << n->get_id() << " to merge with t/f\n";);
                     enode * e = get_enode(to_app(n));
                     set_merge_tf(e, v, false);
                 }
-                else {
+                else {//n没有被internalize为enode
                     TRACE("internalize_bug", tout << "creating enode for #" << n->get_id() << "\n";);
                     mk_enode(to_app(n), 
                              true, /* suppress arguments, we not not use CC for this kind of enode */
                              true, /* bool enode must be merged with true/false, since it is not in the context of a gate */
-                             false /* CC is not enabled */ );
+                             false /* CC is not enabled */ );//则为n构造一个enode
                     set_enode_flag(v, false);
                     if (get_assignment(v) != l_undef)
                         propagate_bool_var_enode(v);
@@ -433,11 +444,11 @@ namespace smt {
 
         if (m.is_eq(n) && !m.is_iff(n))
             internalize_eq(to_app(n), gate_ctx);
-        else if (m.is_distinct(n))
+        else if (m.is_distinct(n))//如果n是distinct则internalize_distinct
             internalize_distinct(to_app(n), gate_ctx);
-        else if (is_app(n) && internalize_theory_atom(to_app(n), gate_ctx))
+        else if (is_app(n) && internalize_theory_atom(to_app(n), gate_ctx))//内化为理论原子
             return;
-        else if (is_quantifier(n)) 
+        else if (is_quantifier(n)) //内化量词
             internalize_quantifier(to_quantifier(n), gate_ctx);
         else
             internalize_formula_core(to_app(n), gate_ctx);
@@ -445,6 +456,7 @@ namespace smt {
 
     /**
        \brief Internalize an equality.
+       中间化等式，在internalize_formula中被调用
     */
     void context::internalize_eq(app * n, bool gate_ctx) {
         SASSERT(!b_internalized(n));
@@ -457,27 +469,29 @@ namespace smt {
         
         sort * s    = m.get_sort(n->get_arg(0));
         theory * th = m_theories.get_plugin(s->get_family_id());
-        if (th)
+        if (th)//调用理论的internalize_eq
             th->internalize_eq_eh(n, v);
     }
 
     /**
        \brief Internalize distinct constructor.
+       在internalize_formula中被调用
     */
     void context::internalize_distinct(app * n, bool gate_ctx) {
         TRACE("distinct", tout << "internalizing distinct: " << mk_pp(n, m) << "\n";);
         SASSERT(!b_internalized(n));
         SASSERT(m.is_distinct(n));
-        bool_var v = mk_bool_var(n);
-        literal l(v);
-        expr_ref def(m.mk_distinct_expanded(n->get_num_args(), n->get_args()), m);
+        bool_var v = mk_bool_var(n);//对app n构建相应的bool 变量 v
+        literal l(v);//l 是与 v对应的文字
+        expr_ref def(m.mk_distinct_expanded(n->get_num_args(), n->get_args()), m);//用mk_distinct_expand展开
         internalize_rec(def, true);
         literal l_def = get_literal(def);
-        mk_gate_clause(~l, l_def);
+        mk_gate_clause(~l, l_def);//添加子句l==l_def
         mk_gate_clause(l, ~l_def);
         // when n->get_num_args() == 2, then mk_distinct_expanded produces a negation.
         // reference counts of negations are not tracked so add relevance dependency
         // of the equality.
+        //当n的参数个数为2时，mk_distince_expanded会产生一个 非。非的引用计数不会被追踪，因此要对该等式添加相关性依赖
         if (m.is_not(def)) def = to_app(def)->get_arg(0);
         add_relevancy_dependency(n, def);
         if (!gate_ctx) {
@@ -491,20 +505,25 @@ namespace smt {
         \brief Try to internalize n as a theory atom. Return true if succeeded.
         The application can be internalize as a theory atom, if there is a theory (plugin)
         that can internalize n.
+        尝试将n内化为理论原子，如果成功内化就返回true
+        如果存在一个理论可以内化n，则app可以被内化为理论原子
+        
+        在internalize_formula中调用
     */
     bool context::internalize_theory_atom(app * n, bool gate_ctx) {
         SASSERT(!b_internalized(n));
-        theory * th  = m_theories.get_plugin(n->get_family_id());
+        theory * th  = m_theories.get_plugin(n->get_family_id());//获取app n对应的理论
         TRACE("datatype_bug", tout << "internalizing theory atom:\n" << mk_pp(n, m) << "\n";);
-        if (!th || !th->internalize_atom(n, gate_ctx))
+        if (!th || !th->internalize_atom(n, gate_ctx))//如果理论不存在，或者理论不能内化该app n，则返回false
             return false;
         TRACE("datatype_bug", tout << "internalization succeeded\n" << mk_pp(n, m) << "\n";);
         SASSERT(b_internalized(n));
         TRACE("internalize_theory_atom", tout << "internalizing theory atom: #" << n->get_id() << "\n";);
-        bool_var v        = get_bool_var(n);
+        bool_var v        = get_bool_var(n);//找到表达式对应的变量
         if (!gate_ctx) {
             // if the formula is not in the context of a gate, then it
             // must be associated with an enode.
+            // 如果该公式不在gate的context中，则它必须与一个enode关联
             if (!e_internalized(n)) {
                 mk_enode(to_app(n), 
                          true, /* suppress arguments, we not not use CC for this kind of enode */
@@ -520,7 +539,7 @@ namespace smt {
         }
         if (e_internalized(n)) {
             set_enode_flag(v, true);
-            if (get_assignment(v) != l_undef)
+            if (get_assignment(v) != l_undef)//如果v已经被赋值了，则要根据它进行传播
                 propagate_bool_var_enode(v);
         }
         SASSERT(!e_internalized(n) || has_enode(v));
@@ -561,6 +580,7 @@ namespace smt {
     /**
        \brief Internalize the given quantifier into the logical
        context. 
+       将给定量词内化进逻辑context中,在internalize_formula中调用
     */
     void context::internalize_quantifier(quantifier * q, bool gate_ctx) {
         TRACE("internalize_quantifier", tout << mk_pp(q, m) << "\n";);
@@ -582,7 +602,7 @@ namespace smt {
         d.set_quantifier_flag();
         m_qmanager->add(q, generation);
     }
-
+    //在internalize_rec中被调用
     void context::internalize_lambda(quantifier * q) {
         TRACE("internalize_quantifier", tout << mk_pp(q, m) << "\n";);
         SASSERT(is_lambda(q));
@@ -612,10 +632,12 @@ namespace smt {
 
     /**
        \brief Internalize gates and (uninterpreted and equality) predicates.
+       中间化gate和（未解释函数，等式）谓词
+       在internalize_eq和internalize_formula中调用
     */
     void context::internalize_formula_core(app * n, bool gate_ctx) {
-        SASSERT(!b_internalized(n));
-        SASSERT(!e_internalized(n));
+        SASSERT(!b_internalized(n));//需要先确保该app n没有被中间化为bool 变量
+        SASSERT(!e_internalized(n));//也没有被中间化为enode
 
         CTRACE("resolve_conflict_crash", m.is_not(n), tout << mk_ismt2_pp(n, m) << "\ngate_ctx: " << gate_ctx << "\n";);
 
@@ -636,7 +658,8 @@ namespace smt {
         //
         // TODO: avoid the problem by delaying the internalization of (= (ite c 1 0) 1) and (= (ite c 1 0) 0).
         // Add them to a queue.
-        if (!b_internalized(n)) {
+        //当n的孩子被中间化后，n可能已经被中间化了
+        if (!b_internalized(n)) {//n还没有被internalize为bool变量
             is_new_var  = true;
             v = mk_bool_var(n);
         }
@@ -647,6 +670,9 @@ namespace smt {
         // a formula needs to be associated with an enode when:
         // 1) it is not in the context of a gate, or
         // 2) it has arguments and it is not a gate (i.e., uninterpreted predicate or equality).
+        //一个公式需要关联一个enode，当：
+        //1.该公式不在gate的context中
+        //2.它带有参数并且它不是gate例如（它是未解释函数或者等式）
         if (!e_internalized(n) && (!gate_ctx || (!_is_gate && n->get_num_args() > 0))) {
             bool suppress_args = _is_gate || m.is_not(n);
             bool merge_tf      = !gate_ctx;
@@ -663,7 +689,10 @@ namespace smt {
         // Now, if v is assigned before being associated with an enode, then
         // v is not going to be inserted in m_atom_propagation_queue, and
         // propagate_bool_var_enode() method is not going to be invoked for v.
-        if (is_new_var && n->get_family_id() == m.get_basic_family_id()) {
+        //在bool_var和与其关联的enode被构造之后，与n关联的约束应该被断言
+        //原因是：不完备性。如果一个赋值的布尔变量 仅会当谓词is_atom（）为true时 在被插入到m_atom_传播_队列中。当创建n的约束时，它们可能会强制赋值v。
+        //现在，如果v在被联系到一个enode之前 就已经被赋值了 ，则v不会被插入m_atom_propogate_queue，并且propogate_bool_var_enode方法不会为v调用（强迫它进行传播）
+        if (is_new_var && n->get_family_id() == m.get_basic_family_id()) {//如果是一个新的bool变量则添加与之相关的约束，此处是约束断言部分
             switch (n->get_decl_kind()) {
             case OP_NOT:
                 SASSERT(!gate_ctx);
@@ -707,6 +736,7 @@ namespace smt {
 
     /**
        \brief Trail object to disable the m_merge_tf flag of an enode.
+       用来禁用m_merge_tf flag的对象
     */
     class set_merge_tf_trail : public trail<context> {
         enode * m_node;
@@ -726,6 +756,12 @@ namespace smt {
        assigned to true (false).
 
        If is_new_var is true, then trail is not created for the flag update.
+       启用制定enode的m_merge 标记。
+       当m_merge标记为真时，一旦变量v被赋值为true（false），该enode n会与true enode（false enode）结合
+
+       在internalize_formula和internalize_theory_atom中调用
+
+       如果is_new_var 为真，则trail不会因为flag更新而被创造
     */
     void context::set_merge_tf(enode * n, bool_var v, bool is_new_var) {
         SASSERT(bool_var2enode(v) == n);
@@ -739,7 +775,7 @@ namespace smt {
                 break;
             case l_true: 
                 if (n->get_root() != m_true_enode->get_root()) 
-                    push_eq(n, m_true_enode, eq_justification(literal(v, false))); 
+                    push_eq(n, m_true_enode, eq_justification(literal(v, false))); //如果目前该变量已经被赋值为true，则将与m_true_node结合
                 break;
             case l_false: 
                 if (n->get_root() != m_false_enode->get_root()) 
@@ -753,6 +789,8 @@ namespace smt {
        \brief Trail object to disable the m_enode flag of a Boolean
        variable. The flag m_enode is true for a Boolean variable v,
        if there is an enode n associated with it.
+       禁用布尔变量的m_enode flag的trail对象。
+       对于布尔变量v，如果有一个enode n联系它，则flag m_enode是true
     */
     class set_enode_flag_trail : public trail<context> {
         bool_var m_var;
@@ -771,6 +809,8 @@ namespace smt {
        the boolean variable is associated with an enode.
 
        If is_new_var is true, then trail is not created for the flag uodate.
+       设置给定bool变量的m_enode flag为true。即，该布尔变量会和一个enode关联
+       如果is_new_var是true，则不会为flag update创造trail
     */
     void context::set_enode_flag(bool_var v, bool is_new_var) {
         SASSERT(e_internalized(bool_var2expr(v)));
@@ -784,9 +824,10 @@ namespace smt {
 
     /**
        \brief Internalize the given term into the logical context.
+       将指定term内化进逻辑context，在internalize_rec中调用
     */
     void context::internalize_term(app * n) {
-        if (e_internalized(n)) {
+        if (e_internalized(n)) {//如果已经为n创造了enode，但是没有为它创造内部变量，则需要为他创造理论变量
             theory * th = m_theories.get_plugin(n->get_family_id());
             if (th != nullptr) {
                 // This code is necessary because some theories may decide
@@ -799,6 +840,11 @@ namespace smt {
                 //   Later, the core tries to internalize (f (* 2 x)).
                 //   Now, (* 2 x) is not internal to arithmetic anymore,
                 //   and a theory variable must be created for it.
+                //该段代码是是有必要的，因为有些理论可能会决定不为一个 嵌套 app 构造理论变量
+                //例如： 假设 (+ (* 2 x) y) 被算数中间化，并且为+和* app构造了一个enode
+                //但是仅为+ app构造了一个理论变量。* app被内化进了算术模。
+                //以后这个核心尝试内化(f (* 2 x))。
+                //现在(* 2 x)不再是算术的内部变量，则必须为它构造一个理论变量
                 enode * e = get_enode(n);
                 if (!th->is_attached_to_var(e))
                     th->internalize_term(n);
@@ -806,11 +852,11 @@ namespace smt {
             return;
         }
 
-        if (m.is_term_ite(n)) {
+        if (m.is_term_ite(n)) {//如果是ite
             internalize_ite_term(n);
-            return; // it is not necessary to apply sort constraint
+            return; // it is not necessary to apply sort constraint没有必要应用类型约束
         }
-        else if (internalize_theory_term(n)) {
+        else if (internalize_theory_term(n)) {//如果不是ite，就内化理论term
             // skip
         }
         else {
@@ -823,6 +869,7 @@ namespace smt {
 
     /**
        \brief Internalize an if-then-else term.
+       中间化一个ITE term
     */
     void context::internalize_ite_term(app * n) {
         SASSERT(!e_internalized(n));
@@ -833,8 +880,8 @@ namespace smt {
         app_ref eq2(mk_eq_atom(n, e), m);
         mk_enode(n, 
                  true /* suppress arguments, I don't want to apply CC on ite terms */,
-                 false /* it is a term, so it should not be merged with true/false */,
-                 false /* CC is not enabled */);
+                 false /* it is a term, so it should not be merged with true/false 不会和true/false合并*/,
+                 false /* CC is not enabled 不实用CC */);
         internalize_rec(c, true);
         internalize_rec(t, false);
         internalize_rec(e, false);        
@@ -851,7 +898,7 @@ namespace smt {
               tout << mk_ismt2_pp(eq1, m) << "\n";              
               tout << mk_ismt2_pp(eq2, m) << "\n";              
               tout << "literals:\n" << c_lit << " " << eq1_lit << " " << eq2_lit << "\n";);
-        mk_gate_clause(~c_lit, eq1_lit);
+        mk_gate_clause(~c_lit, eq1_lit);//c_lit-->eq1_lit，如果c为真，则n和t的取值相同
         mk_gate_clause( c_lit, eq2_lit);
         if (relevancy()) {
             relevancy_eh * eh = m_relevancy_propagator->mk_term_ite_relevancy_eh(n, eq1, eq2);
@@ -866,11 +913,14 @@ namespace smt {
     /** 
         \brief Try to internalize a theory term. That is, a theory (plugin)
         will be invoked to internalize n. Return true if succeeded.
+        尝试中间化一个理论term，即嗲用一个理论来internalize n
+        它可能会失败，因为可能不存在一个理论，或者理论不支持它
+        在internalize_term中使用
         
         It may fail because there is no plugin or the plugin does not support it.
     */
     bool context::internalize_theory_term(app * n) {
-        theory * th  = m_theories.get_plugin(n->get_family_id());
+        theory * th  = m_theories.get_plugin(n->get_family_id());//找到这个表达式n对应的理论
         if (!th || !th->internalize_term(n))
             return false;
         return true;
@@ -878,6 +928,7 @@ namespace smt {
 
     /**
        \brief Internalize an uninterpreted function application or constant.
+       中间化一个未解释app或者一个常数
     */
     void context::internalize_uninterpreted(app * n) {
         SASSERT(!e_internalized(n));
@@ -896,6 +947,7 @@ namespace smt {
 
     /**
        \brief Create a new boolean variable and associate it with n.
+       构造一个与表达式n相关的新布尔变量,在internalize_formula_core,internalize_distinct，internalize_quantifier中调用
     */
     bool_var context::mk_bool_var(expr * n) {
         SASSERT(!b_internalized(n));
@@ -936,7 +988,7 @@ namespace smt {
         SASSERT(check_bool_var_vector_sizes());
         return v;
     }
-    
+    //删除加入的bool变量
     void context::undo_mk_bool_var() {
         SASSERT(!m_b_internalized_stack.empty());
         m_stats.m_num_del_bool_var++;
@@ -957,6 +1009,8 @@ namespace smt {
 
     /**
        \brief Create an new enode. 
+       为表达式n构造一个新的enode，如果suppress_args为true，则该enode在egraph中被看作是常量
+       在internalize_formula，internalize_uninterpreted，internalize_ite_term，internalize_theory_atom中调用
 
        \remark If suppress_args is true, then the enode is viewed as a constant
        in the egraph.
@@ -1065,6 +1119,7 @@ namespace smt {
 
     /**
        \brief Apply sort constraints on e.
+       在enode e上应用类型约束，找到term的decl的类型sort，如果其有理论就调用该理论的apply_sort，在internalize_term，internalize_uninterpreted中使用
     */
     void context::apply_sort_cnstr(app * term, enode * e) {
         sort * s    = term->get_decl()->get_range();
@@ -1076,6 +1131,7 @@ namespace smt {
 
     /**
        \brief Return the literal associated with n.
+       返回与表达式 n关联的文字
     */
     literal context::get_literal(expr * n) const {
         if (m.is_not(n, n)) {
@@ -1123,6 +1179,7 @@ namespace smt {
 
        被删除的文字被存在了simp_lits中
        使用当前赋值来化简辅助子句是安全的，因为他们会在回退的过程中被删除
+       在mk_clause中的aux_cls和th_axiom中调用
     */
     bool context::simplify_aux_clause_literals(unsigned & num_lits, literal * lits, literal_buffer & simp_lits) {
         TRACE("simplify_aux_clause_literals", display_literals(tout, num_lits, lits); tout << "\n";);
@@ -1172,7 +1229,13 @@ namespace smt {
        
        - If l and ~l are in lits, then return false (source is
          irrelevant, that is, it is equivalent to true)
-
+        在mk_clause中构造 理论 lemma子句中被使用
+        化简辅助lemma中的文字，一个辅助lemma有学习子句的状态，但是不是由冲突归结产生的
+        一个动态ackermann子句是一个辅助lemma的例子
+        如下化简会被用来化简理论lemma
+        1.删除重复
+        2.如果一个文字在底层被赋值为true，则返回false，该子句已经等于true
+        3.如果l和～l同时出现，则返回false，因为该子句已经被赋值为true了
        \remark Literals assigned to false at the base level are not
        removed because I don't want to create a justification for this
        kind of simplification.
@@ -1217,6 +1280,10 @@ namespace smt {
        2) An aux lemma is in conflict or propagated a literal when it was created.
        Then, we should check whether the aux lemma is still in conflict or propagating
        a literal after backtracking the current scope level.
+    一个lemma或者aux子句可能需要被重新初始化，因为如下两个原因：
+    1)lemma和aux lemmas可能包含了 在搜索过程中被构造，并且这些文字的最大内化层 就是 scope_lvl 的文字。因为该子句可能在回退之后还活着，所以它必须被重新初始化。在这种情况下，reinitialize_atoms时true
+    2) 一个aux lemma在创建时冲突或传播文字。则，我们要检测aux lemma是否在回退当前scope层后 仍然在冲突或者传播文字
+    在mk_clause中被调用
     */
     void context::mark_for_reinit(clause * cls, unsigned scope_lvl, bool reinternalize_atoms) {
         SASSERT(scope_lvl >= m_base_lvl);
@@ -1229,6 +1296,7 @@ namespace smt {
 
     /**
        \brief Return max({ get_intern_level(var) | var \in lits })
+       返回在lit中的变量的最大intern_lvl，（即被内化的scope 层）
     */
     unsigned context::get_max_iscope_lvl(unsigned num_lits, literal const * lits) const {
         unsigned r = 0;
@@ -1242,10 +1310,13 @@ namespace smt {
 
     /**
        \brief Return true if it safe to use the binary clause optimization at this point in time.
+       如果此时可以安全地使用二元子句优化，返回true
     */
     bool context::use_binary_clause_opt(literal l1, literal l2, bool lemma) const {
         if (!binary_clause_opt_enabled())
             return false;
+        //当使用了相关性，则二元子句不能使用
+        //原因是：当一个学习子句成为了单元子句，它应该标记单元文字为相关的。当二元优化被使用时，不可能区分学习和非学习子句
         // When relevancy is enable binary clauses should not be used.
         // Reason: when a learned clause becomes unit, it should mark the
         // unit literal as relevant. When binary_clause_opt is used,
@@ -1274,6 +1345,13 @@ namespace smt {
 
        If a literal is not assigned, it means it was re-initialized
        after backtracking. So, its level is assumed to be m_scope_lvl.
+       由SAT 求解器生成的学习子句有如下性质：第一个文字是在回溯后被imply的文字
+       当学习子句被生成的时候，所有其他的文字都被赋值或者imply为false
+       第一个watch文字总是第一个文字。
+       第二个watch文字由该方法计算。它应该是有最高决策层的文字
+
+       如果一个文字没有被赋值，则表示它在回退之后被重新初始化了，因此他的level被假设成m_scope_lvl
+       在mk_clause中构造SAT返回的lemma中调用
     */
     int context::select_learned_watch_lit(clause const * cls) const {
         SASSERT(cls->get_num_literals() >= 2);
@@ -1323,6 +1401,8 @@ namespace smt {
         则选择从starting_at开始的不同的文字l，使得l的level比所有其他文字l'的level高，(如果没有规则3，BCP可能不完备，因为它可能会错过可能的传播?)
        
        Without rule 3, boolean propagation is incomplete, that is, it may miss possible propagations.
+
+       在mk_clause中的理论lemma产生时被调用
        
        \remark The method select_lemma_watch_lit is used to select the
        watch literal for regular learned clauses.
@@ -1359,7 +1439,8 @@ namespace smt {
     }
 
     /**
-       \brief Add watch literal to the given clause. 
+       \brief Add watch literal to the given clause.
+       在mk_clause中调用 
 
        \pre idx must be 0 or 1.
     */
@@ -1377,6 +1458,7 @@ namespace smt {
        The deletion event handler is ignored if binary clause optimization is applicable.
        用给定的文字，证明，类型，删除事件句柄来构造一个新的子句
        如果使用了二元子句优化，则删除事件句柄被忽视
+       在mk_root_clause，mk_th_clause中调用
     */
     clause * context::mk_clause(unsigned num_lits, literal * lits, justification * j, clause_kind k, clause_del_eh * del_eh) {
         TRACE("mk_clause", display_literals_verbose(tout << "creating clause: " << literal_vector(num_lits, lits) << "\n", num_lits, lits) << "\n";);
@@ -1398,7 +1480,7 @@ namespace smt {
             }
             break;
         }
-        case CLS_TH_LEMMA: 
+        case CLS_TH_LEMMA: //化简理论lemma
             if (!simplify_aux_lemma_literals(num_lits, lits)) {
                 if (j && !j->in_region()) {
                     j->del_eh(m);
@@ -1408,6 +1490,7 @@ namespace smt {
             }
             // simplify_aux_lemma_literals does not delete literals assigned to false, so
             // it is not necessary to create a unit_resolution_justification
+            //不会删除被赋值为false的文字，因此不必要构造一个单元归结验证
             break;        
         default:
             break;
@@ -1456,13 +1539,13 @@ namespace smt {
             SASSERT(!lemma || j == 0 || !j->in_region());
             clause * cls = clause::mk(m, num_lits, lits, k, j, del_eh, save_atoms, m_bool_var2expr.c_ptr());//如果是多元子句，就在这儿构造一个新子句
             m_clause_proof.add(*cls);
-            if (lemma) {
+            if (lemma) {//lemma，添加到m_lemmas中
                 cls->set_activity(activity);
-                if (k == CLS_LEARNED) {
+                if (k == CLS_LEARNED) {//SAT回退中返回的学习子句
                     int w2_idx  = select_learned_watch_lit(cls);
                     cls->swap_lits(1, w2_idx);
                 }
-                else {
+                else {//理论lemma
                     SASSERT(k == CLS_TH_LEMMA);
                     int w1_idx = select_watch_lit(cls, 0);
                     cls->swap_lits(0, w1_idx);
@@ -1470,7 +1553,7 @@ namespace smt {
                     cls->swap_lits(1, w2_idx);
                     TRACE("mk_th_lemma", display_clause(tout, cls); tout << "\n";);
                 }
-                // display_clause(std::cout, cls); std::cout << "\n";
+
                 m_lemmas.push_back(cls);
                 add_watch_literal(cls, 0);
                 add_watch_literal(cls, 1);
@@ -1491,7 +1574,7 @@ namespace smt {
                 if (reinit)
                     mark_for_reinit(cls, iscope_lvl, save_atoms);
             }
-            else {
+            else {//辅助子句，添加到m_aux_clauses中
                 m_aux_clauses.push_back(cls);
                 add_watch_literal(cls, 0);
                 add_watch_literal(cls, 1);
@@ -1519,7 +1602,7 @@ namespace smt {
         literal ls[3] = { l1, l2, l3 };
         mk_clause(3, ls, j);
     }
-    
+    //构造理论子句，在mk_th_axiom中调用
     void context::mk_th_clause(theory_id tid, unsigned num_lits, literal * lits, unsigned num_params, parameter * params, clause_kind k) {
         justification * js = nullptr;
         TRACE("mk_th_axiom", display_literals_verbose(tout, num_lits, lits) << "\n";);
@@ -1540,12 +1623,12 @@ namespace smt {
         literal ls[2] = { l1, l2 };
         mk_th_axiom(tid, 2, ls, num_params, params);
     }
-
+    //构造理论公理
     void context::mk_th_axiom(theory_id tid, literal l1, literal l2, literal l3, unsigned num_params, parameter * params) {
         literal ls[3] = { l1, l2, l3 };
         mk_th_axiom(tid, 3, ls, num_params, params);
     }
-
+    //在mk_gate_clause和mk_root_clause中调用，都是在需要proof时使用
     proof * context::mk_clause_def_axiom(unsigned num_lits, literal * lits, expr * root_gate) {
         ptr_buffer<expr> new_lits;
         for (unsigned i = 0; i < num_lits; i++) {
@@ -1561,7 +1644,7 @@ namespace smt {
         return m.mk_def_axiom(fact);
         
     }
-
+    //构造门子句，在mk_cnstr中调用
     void context::mk_gate_clause(unsigned num_lits, literal * lits) {
         if (m.proofs_enabled()) {
             proof * pr = mk_clause_def_axiom(num_lits, lits, nullptr);
@@ -1587,7 +1670,7 @@ namespace smt {
         literal ls[4] = { l1, l2, l3, l4 };
         mk_gate_clause(4, ls);
     }
-
+    //构造根子句,在internalize_assertion中被调用
     void context::mk_root_clause(unsigned num_lits, literal * lits, proof * pr) {
         if (m.proofs_enabled()) {//该例子中不使用proof
             SASSERT(m.get_fact(pr));
@@ -1621,18 +1704,18 @@ namespace smt {
         literal ls[3] = { l1, l2, l3 };
         mk_root_clause(3, ls, pr);
     }
-
+    //该方法会被在internalize_formula_core中被调用
     void context::add_and_rel_watches(app * n) {
         if (relevancy()) {
             relevancy_eh * eh = m_relevancy_propagator->mk_and_relevancy_eh(n);
             for (expr * arg : *n) {
-                // if one child is assigned to false, the and-parent must be notified
+                // if one child is assigned to false, the and-parent must be notified 如果一个child被赋值为false则and_parent需要被通知
                 literal l = get_literal(arg);
                 add_rel_watch(~l, eh);
             }
         }
     }
-
+    //会在internalize_formula_core和internalize_assertion中被调用
     void context::add_or_rel_watches(app * n) {
         if (relevancy()) {
             relevancy_eh * eh = m_relevancy_propagator->mk_or_relevancy_eh(n);
@@ -1643,18 +1726,18 @@ namespace smt {
             }
         }
     }
-
+    //会在internalize_formula_core和internalize_assertion中被调用
     void context::add_ite_rel_watches(app * n) {
         if (relevancy()) {
             relevancy_eh * eh = m_relevancy_propagator->mk_ite_relevancy_eh(n);
             literal l         = get_literal(n->get_arg(0));
-            // when the condition of an ite is assigned to true or false, the ite-parent must be notified.
+            // when the condition of an ite is assigned to true or false, the ite-parent must be notified.当ite的条件被设为false或者true时，则ite-parent需要被通知
             TRACE("propagate_relevant_ite", tout << "#" << n->get_id() << ", eh: " << eh << "\n";);
             add_rel_watch(l, eh);
             add_rel_watch(~l, eh);
         }    
     }
-    
+    //如下一系列的mk都会在internalize_formul_core中被调用
     void context::mk_not_cnstr(app * n) {
         SASSERT(b_internalized(n));
         bool_var v = get_bool_var(n);
@@ -1703,7 +1786,7 @@ namespace smt {
         mk_gate_clause( l,  l1,  l2);
         mk_gate_clause( l, ~l1, ~l2);
     }
-
+    //在internalize_formula_core中被调用
     void context::mk_ite_cnstr(app * n) {
         literal l  = get_literal(n);
         literal l1 = get_literal(n->get_arg(0));
@@ -1717,6 +1800,7 @@ namespace smt {
 
     /**
        \brief Trail for add_th_var
+       添加理论变量的迹
     */
     class add_th_var_trail : public trail<context> {
         enode *    m_enode;
@@ -1745,6 +1829,7 @@ namespace smt {
 
     /**
        \brief Trail for replace_th_var
+       replace_th_var的Trail
     */
     class replace_th_var_trail : public trail<context> {
         enode *    m_enode;
@@ -1771,21 +1856,25 @@ namespace smt {
 
        This method should be invoked whenever the theory creates a new theory variable.
 
+        将理论变量v联系到一个enode上
+        enode n被联系到 理论th的任意理论变量上
+        每当理论创造一个新的理论变量时调用该方法
+        理论th的new_eq_eh和new_diseq可能会在该方法返回之前被调用
        \remark The methods new_eq_eh and new_diseq_eh of th may be invoked before this method 
        returns.
     */
     void context::attach_th_var(enode * n, theory * th, theory_var v) {
         SASSERT(!th->is_attached_to_var(n));
         theory_id th_id = th->get_id();
-        theory_var old_v = n->get_th_var(th_id);
-        if (old_v == null_theory_var) {
+        theory_var old_v = n->get_th_var(th_id);//原来 理论th 跟n相连的理论变量
+        if (old_v == null_theory_var) {//原来的理论不和n相连
             enode * r     = n->get_root();
-            theory_var v2 = r->get_th_var(th_id);
-            n->add_th_var(v, th_id, m_region);
+            theory_var v2 = r->get_th_var(th_id);//找到n的根和理论th相连的理论变量v2
+            n->add_th_var(v, th_id, m_region);//向n中添加理论变量
             push_trail(add_th_var_trail(n, th_id));
-            if (v2 == null_theory_var) {
+            if (v2 == null_theory_var) {//如果n的根 不和 理论相连
                 if (r != n)
-                    r->add_th_var(v, th_id, m_region);
+                    r->add_th_var(v, th_id, m_region);//向根中添加理论变量
                 push_new_th_diseqs(r, v, th);
             }
             else if (r != n) {
@@ -1793,14 +1882,16 @@ namespace smt {
             }
         }
         else {
+            //如果在enode n的var-list中存在old_v
+            //则该变量已经被移动到n的var-list中，由于add_eq操作
             // Case) there is a variable old_v in the var-list of n.
             //
             // Remark: This variable was moved to the var-list of n due to a add_eq.
-            SASSERT(th->get_enode(old_v) != n); // this varialbe is not owned by n
+            SASSERT(th->get_enode(old_v) != n); // this varialbe is not owned by n 该变量不被n拥有
             SASSERT(n->get_root()->get_th_var(th_id) != null_theory_var); // the root has also a variable in its var-list.
-            n->replace_th_var(v, th_id);
+            n->replace_th_var(v, th_id);//把n原来的理论变量替换成新的
             push_trail(replace_th_var_trail(n, th_id, old_v));
-            push_new_th_eq(th_id, v, old_v);
+            push_new_th_eq(th_id, v, old_v);//认为原来的old_v和新的v是相等的
         }
         SASSERT(th->is_attached_to_var(n));
     }

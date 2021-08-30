@@ -460,6 +460,7 @@ namespace smt {
 
         /**
            \brief Return the scope level when v was internalized.
+           返回v被内化的scope层
         */
         unsigned get_intern_level(bool_var v) const {
             return get_bdata(v).get_intern_level();

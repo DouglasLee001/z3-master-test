@@ -125,7 +125,7 @@ namespace smt {
     }
     
     bool theory::assume_eq(enode * n1, enode * n2) {
-        return ctx.assume_eq(n1, n2);
+        return ctx.assume_eq(n1, n2);//调用context中的方法，假设两个enode是相等的
     }
 
     literal theory::mk_eq(expr * a, expr * b, bool gate_ctx) {

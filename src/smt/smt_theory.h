@@ -60,9 +60,9 @@ namespace smt {
         to decide whether an enode is already associated with a theory 
         variable or not.
         在逻辑context中，表达式被中间化了。
-        也就是说，逻辑context构造了辅助数据结构(enode)并将其与表达式相关联。
+        也就是说，逻辑context构造了辅助数据结构(enode) 并将其与表达式相关联。
         逻辑context并不知道每个理论的内部构件
-        所以，在内化过程中，它会提醒理论插件，它何时找到了一个带有理论函数符号的app
+        所以，在内化过程中，每当它找到了一个 带有理论函数符号 的app，它会提醒理论插件
 
         一个在n层被创造的理论变量，必须在当n层被回溯的时候被删除
 
@@ -98,12 +98,15 @@ namespace smt {
            A theory variable v may be in the list of variables of n,
            but it may be inherited from another enode n' during an
            equivalence class merge. That is, get_enode(v) != n.
+           如果指定的enode与理论的一个变量 相关联 则返回true
+           该结果不等同于n->get_th_var(get_id()) != null_theory_var
+           一个理论变量v可能在n的变量列表中，但是它可能是在一次等价类合并操作，从另外一个enode n'继承的，即get_enode(v)!=n
         */
         bool is_attached_to_var(enode const * n) const {
             theory_var v = n->get_th_var(get_id());
             return v != null_theory_var && get_enode(v) == n;
         }
-
+    //用于追踪，打印信息
         struct scoped_trace_stream {
             ast_manager& m;
             
@@ -181,6 +184,10 @@ namespace smt {
            Theories like arithmetic do not use default internalization.
            For example, in the application (+ a (+ b c)), no enode is created
            for (+ b c).
+           如果理论使用了默认 中间化 则返回true：
+           一个app的内化过程会内化所有参数。
+           像算术之类的理论不会使用默认内化过程。
+           例如在app (+ a (+ b c))中，不会为(+ b c)创造enode
         */
         virtual bool default_internalizer() const {
             return true;
@@ -193,12 +200,16 @@ namespace smt {
 
            After the execution of this method the given atom must be
            associated with a new boolean variable.
+           当原子atom正在被内化时，该方法被逻辑context调用。
+           如果理论不愿意实现给定的谓词符号，则理论可能返回false
+           在执行该方法之后，给定原子必须关联到一个新的布尔变量
         */
         virtual bool internalize_atom(app * atom, bool gate_ctx) = 0;
 
         /**
            \brief This method is invoked by the logical context
            after the given equality atom is internalized.
+           在给定等式原子被中间化后，该方法被逻辑context调用
         */
         virtual void internalize_eq_eh(app * atom, bool_var v) {
         }
@@ -210,11 +221,15 @@ namespace smt {
            
            After the execution of this method the given term must be 
            associated with a new enode.
+           当term正在被中间化，该方法被逻辑context调。
+           如果理论不想实现给定的函数符号，则理论可能返回false
+           在执行该方法之后，给定的term必须被关联到一个新的enode
         */
         virtual bool internalize_term(app * term) = 0;
 
         /**
            \brief Apply (interpreted) sort constraints on the given enode.
+           在给定enode上应用（解释的）类型约束
         */
         virtual void apply_sort_cnstr(enode * n, sort * s) {
         }
@@ -222,12 +237,14 @@ namespace smt {
         /**
            \brief This method is invoked when a truth value is 
            assigned to the given boolean variable.
+           当给定bool变量被赋值时，该方法被调用，core提醒理论一个atom被赋值了!!
         */
         virtual void assign_eh(bool_var v, bool is_true) {
         }
 
         /**
            \brief use the theory to determine phase of the variable.
+           用理论来确定给定布尔变量的phase
          */
         virtual lbool get_phase(bool_var v) {
             return l_undef;
@@ -235,12 +252,14 @@ namespace smt {
 
         /**
            \brief Equality propagation (v1 = v2): Core -> Theory
+           将等式（v1=v2）从core传播给理论
         */
         virtual void new_eq_eh(theory_var v1, theory_var v2) = 0;
 
         /**
            \brief Return true if the theory does something with the
            disequalities implied by the core.
+           如果理论对由core推出的不等式做了一些事，则返回true
         */
         virtual bool use_diseqs() const { 
             return true; 
@@ -248,12 +267,14 @@ namespace smt {
 
         /**
            \brief Disequality propagation (v1 /= v2): Core -> Theory
+           不等式传播，core提醒theory一个不等式(v1!=v2)被传播了
         */
         virtual void new_diseq_eh(theory_var v1, theory_var v2) = 0;
 
         /**
            \brief This method is invoked when the theory application n
            is marked as relevant.
+           当理论app n被标记为相关，该方法被调用
          */
         virtual void relevant_eh(app * n) {
         }
@@ -261,17 +282,20 @@ namespace smt {
         /**
            \brief This method is invoked when a new backtracking point
            is created.
+           当一个新的回溯点被创造时，该方法被调用!!，core提醒theory做了一个决策
         */
         virtual void push_scope_eh();
 
         /**
            \brief This method is invoked during backtracking.
+           该方法在当回溯时该方法被调用!!core提醒theory一个决策需要被删除
         */
         virtual void pop_scope_eh(unsigned num_scopes);
 
         /**
            \brief This method is invoked when the logical context is being
            restarted.
+           当逻辑context正在被重启时，调用该方法,即core提醒theory搜索过程正在重启
         */
         virtual void restart_eh() {
         }
@@ -280,6 +304,7 @@ namespace smt {
            \brief This method is called by smt_context before the search starts
            to get any extra assumptions the theory wants to use.
            (See theory_str for an example)
+           在搜索开始之前，smt_context会调用该方法来获得 理论 想要使用的附加假设
         */
         virtual void add_theory_assumptions(expr_ref_vector & assumptions) {
         }
@@ -287,6 +312,8 @@ namespace smt {
         /**
            \brief This method is called from the smt_context when an unsat core is generated.
            The theory may change the answer to UNKNOWN by returning l_undef from this method.
+           当一个unsat 核被生成时，smt_context会调用该方法
+           理论可能通过该方法返回l_undef来将答案修改为unknown
         */
         virtual lbool validate_unsat_core(expr_ref_vector & unsat_core) {
             return l_false;
@@ -304,6 +331,7 @@ namespace smt {
 
         /**
            \brief This method is invoked before the search starts.
+           该方法会在搜索开始之前被调用
         */
         virtual void init_search_eh() {
         }
@@ -312,6 +340,7 @@ namespace smt {
            \brief This method is invoked when the logical context assigned
            a truth value to all boolean variables and no inconsistency was 
            detected.
+           当逻辑context对所有bool 变量都赋值了，并且没有发现不一致时，该方法被调用
         */
         virtual final_check_status final_check_eh() {
             return FC_DONE;
@@ -320,6 +349,7 @@ namespace smt {
         /**
            \brief Parametric theories (e.g. Arrays) should implement this method.
            See example in context::is_shared
+           参数化理论应该实现该方法（如数组）
         */
         virtual bool is_shared(theory_var v) const {
             return false;
@@ -327,6 +357,7 @@ namespace smt {
     
         /**
            \brief Return true if the theory has something to propagate
+            如果该理论有可以传播的东西，就返回true
         */
         virtual bool can_propagate() {
             return false;
@@ -343,6 +374,7 @@ namespace smt {
         /**
            \brief This method allows a theory to contribute to
            disequality propagation.
+           该方法允许理论来为不等式传播贡献
         */
         virtual justification * why_is_diseq(theory_var v1, theory_var v2) {
             return nullptr;
@@ -350,18 +382,20 @@ namespace smt {
 
         /**
            \brief Just releases memory.
+           释放内存
         */
         virtual void flush_eh() {
         }
 
         /**
            \brief This method is invoked when the logical context is being reset.
+           当逻辑context正在被重置时，该方法被调用
         */
         virtual void reset_eh();
 
         // ----------------------------------------------------
         //
-        // Model validation 
+        // Model validation 模型验证
         //
         // ----------------------------------------------------
 
@@ -369,7 +403,7 @@ namespace smt {
 
         // ----------------------------------------------------
         //
-        // Conflict resolution event handler
+        // Conflict resolution event handler 冲突归结事件处理
         //
         // ----------------------------------------------------
     public:
@@ -377,6 +411,8 @@ namespace smt {
            \brief This method is invoked when a theory atom is used
            during conflict resolution. This allows the theory to bump
            the activity of the enodes contained in the given atom.
+           当一个理论原子在冲突归结中被使用了，该方法被调用
+           这使得该理论能够提高给定原子中所含enode的活性
         */
         virtual void conflict_resolution_eh(app * atom, bool_var v) {
         }
@@ -420,6 +456,7 @@ namespace smt {
         /**
            \brief Return the equivalence class representative 
            of the given theory variable.
+           返回理论变量v所在的等价类的代表
         */
         theory_var get_representative(theory_var v) const {
             SASSERT(v != null_theory_var);
@@ -431,6 +468,7 @@ namespace smt {
         /** 
             \brief Return true if the theory variable is the representative
             of its equivalence class.
+            如果该理论变量是它所在等价类的代表，则返回true
         */
         bool is_representative(theory_var v) const {
             return get_representative(v) == v;
@@ -499,6 +537,11 @@ namespace smt {
 
            - void reset()
            - theory_var insert_if_not_there(theory_var v)
+           假设 与给定表相等的变量 之间的等式
+           表格是一个由变量值编码的哈希表
+
+           如果存在一个表中的变量v'的赋值与v相等，则table.contains(v)要返回true
+           该方法假设VarValueTable包含如下方法：
         */
         template<typename VarValueTable>
         bool assume_eqs(VarValueTable & table) {
@@ -533,6 +576,10 @@ namespace smt {
            conventions in their simplifiers. For example, arithmetic always force a numeral
            to be in the right hand side. So, this method should be redefined if the default
            behavior conflicts with a convention used by the theory/family.
+           当一个等式原子n在搜索过程中被创造了，默认行为是确保n->get_arg(0)->get_id() < n->get_arg(1)->get_id()
+           这可能产生一些多余的原子，因为一些理论会在他们的化简器中使用不同的转化。
+           例如，算术理论总是强迫在右侧有一个数字。
+           所以如果默认行为与理论使用的转化冲突时，该方法应该被重新定义
         */
         virtual app * mk_eq_atom(expr * lhs, expr * rhs) {
             ast_manager& m = get_manager();
@@ -563,6 +610,7 @@ namespace smt {
 
         /**
            \brief Return true if theory support model construction
+           如果理论支持模型构造则返回true
         */
         virtual bool build_models() const { 
             return true;
@@ -576,6 +624,7 @@ namespace smt {
         
         /**
            \brief Return a functor that can build the value (interpretation) for n.
+           返回可以为n构造一个值（解释）的函数
         */
         virtual model_value_proc * mk_value(enode * n, model_generator & mg) {
             return nullptr;
@@ -603,7 +652,7 @@ namespace smt {
         // This function is used to create a fresh context (new_ctx) containing the same theories of the context that owns this theory.
         //
         // We need the parameter new_ctx because of user_smt_theory :-(
-        //
+        //返回一个给定理论的新例子，该函数用来构造一个新的context，包含了拥有该理论的context的相同理论
         // -----------------------------------
         virtual theory * mk_fresh(context * new_ctx) = 0;
 
