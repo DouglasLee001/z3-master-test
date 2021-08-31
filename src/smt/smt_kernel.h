@@ -10,6 +10,8 @@ Abstract:
     New frontend for smt::context.
     The "kernel" tries to hide details of the smt::context object.
     From now on, clients (code outside of the smt module) should be use smt::kernel instead of smt::context.
+    context的新的前端，kernel将context的细节隐藏
+    用户（smt模块外的代码）只会调用kernel 而不会调用context
     
 Author:
 

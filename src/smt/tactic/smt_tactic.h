@@ -7,7 +7,8 @@ Module Name:
 
 Abstract:
 
-    smt::context as a tactic.
+    smt::context as a tactic 
+    context作为一个tactic
 
 Author:
 

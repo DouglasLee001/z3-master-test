@@ -169,23 +169,23 @@ public:
             expr2expr_map               bool2dep;
             ptr_vector<expr>            assumptions;
             ref<generic_model_converter> fmc;
-            if (in->unsat_core_enabled()) {
+            if (in->unsat_core_enabled()) {//如果调用unsat core
                 extract_clauses_and_dependencies(in, clauses, assumptions, bool2dep, fmc);
                 TRACE("mus", in->display_with_dependencies(tout);
                       tout << clauses << "\n";);
                 if (in->proofs_enabled() && !assumptions.empty())
                     throw tactic_exception("smt tactic does not support simultaneous generation of proofs and unsat cores");
-                for (unsigned i = 0; i < clauses.size(); ++i) {
+                for (unsigned i = 0; i < clauses.size(); ++i) {//逐个遍历clauses中的表达式，进行断言
                     m_ctx->assert_expr(clauses[i].get());
                 }
             }
-            else if (in->proofs_enabled()) {
+            else if (in->proofs_enabled()) {//如果使用proof，则遍历in goal中的表达式，将其加入到ctx中断言，并且需要顺便加上证明
                 unsigned sz = in->size();
                 for (unsigned i = 0; i < sz; i++) {
                     m_ctx->assert_expr(in->form(i), in->pr(i));
                 }
             }
-            else {
+            else {//如果都不需要证明或者unsat_core，则直接遍历in goal中的各个表达式加入到ctx中
                 unsigned sz = in->size();
                 for (unsigned i = 0; i < sz; i++) {
                     m_ctx->assert_expr(in->form(i));
@@ -193,12 +193,14 @@ public:
             }
             if (m_ctx->canceled()) {                
                 throw tactic_exception(Z3_CANCELED_MSG);
-            }
-
+            }//目前已经将子句放进了m_ctx的断言中
+            std::cout<<"\nbefore invoke context, the asserted formula:\n";
+            m_ctx->display(std::cout);
+            std::cout<<"\n\n";
             lbool r;
             try {
                 if (assumptions.empty())
-                    r = m_ctx->setup_and_check();
+                    {r = m_ctx->setup_and_check();}//此处进入调用kernel的check!!
                 else
                     r = m_ctx->check(assumptions.size(), assumptions.c_ptr());
             }
@@ -212,13 +214,15 @@ public:
             proof_ref pr(m_ctx->get_proof(), m);
             TRACE("smt_tactic", tout << r << " " << pr << "\n";);
             switch (r) {
-            case l_true: {
+            case l_true: {//如果结果是可满足的
                 if (m_fail_if_inconclusive && !in->sat_preserved())
                     throw tactic_exception("over-approximated goal found to be sat");
                 // the empty assertion set is trivially satifiable.
+                //空断言集合是明显可满足的
                 in->reset();
-                result.push_back(in.get());
+                result.push_back(in.get());//结果goal存放的是空的，即可满足的
                 // store the model in a no-op model converter, and filter fresh Booleans
+                //将model存在一个无操作转换器中，并且过滤新的bool
                 if (in->models_enabled()) {
                     model_ref md;
                     m_ctx->get_model(md);
@@ -241,21 +245,22 @@ public:
                     throw tactic_exception("under-approximated goal found to be unsat");
                 }
                 // formula is unsat, reset the goal, and store false there.
+                //公式是不可满足的，则重置goal，并且将false存在那儿
                 in->reset();
                 expr_dependency * lcore = nullptr;
                 if (in->unsat_core_enabled()) {
-                    unsigned sz = m_ctx->get_unsat_core_size();
-                    for (unsigned i = 0; i < sz; i++) {
+                    unsigned sz = m_ctx->get_unsat_core_size();//如果in的goal需要unsat core
+                    for (unsigned i = 0; i < sz; i++) {//逐个遍历unsat_core中的表达式
                         expr * b = m_ctx->get_unsat_core_expr(i);
                         SASSERT(is_uninterp_const(b) && m.is_bool(b));
-                        expr * d = bool2dep.find(b);
-                        lcore = m.mk_join(lcore, m.mk_leaf(d));
+                        expr * d = bool2dep.find(b);//找到b对应的依赖
+                        lcore = m.mk_join(lcore, m.mk_leaf(d));//将依赖加到依赖核心lcore上
                     }
                 }
 
-                if (m.proofs_enabled() && !pr) pr = m.mk_asserted(m.mk_false()); // bail out
-                if (pr && m.get_fact(pr) != m.mk_false()) pr = m.mk_asserted(m.mk_false()); // could happen in clause_proof mode
-                in->assert_expr(m.mk_false(), pr, lcore);
+                if (m.proofs_enabled() && !pr) pr = m.mk_asserted(m.mk_false()); // bail out 保释
+                if (pr && m.get_fact(pr) != m.mk_false()) pr = m.mk_asserted(m.mk_false()); // could happen in clause_proof mode 可能会在clause_proof模块中发生
+                in->assert_expr(m.mk_false(), pr, lcore);//in变成assert表达式为false，依赖是lcore
                 
                 result.push_back(in.get());
                 return;
@@ -266,12 +271,12 @@ public:
                     throw tactic_exception(Z3_CANCELED_MSG);
                 }
 
-                if (m_fail_if_inconclusive && !m_candidate_models && !pr) {
+                if (m_fail_if_inconclusive && !m_candidate_models && !pr) {//无法判断是目标是sat还是unsat
                     std::stringstream strm;
                     strm << "smt tactic failed to show goal to be sat/unsat " << m_ctx->last_failure_as_string();
                     throw tactic_exception(strm.str());
                 }
-                result.push_back(in.get());
+                result.push_back(in.get());//将结果原封不动返回给result
                 if (pr) {
                     in->reset();
                     in->assert_expr(m.get_fact(pr), pr, nullptr);

@@ -8,6 +8,7 @@ Module Name:
 Abstract:
 
     Convert solver to a tactic.
+    将一个求解器转成一个tactic
 
 Author:
 
@@ -24,7 +25,7 @@ Notes:
 #include "ast/ast_util.h"
 
 typedef obj_map<expr, expr *> expr2expr_map;
-
+//提取子句和依赖项
 void extract_clauses_and_dependencies(goal_ref const& g, expr_ref_vector& clauses, ptr_vector<expr>& assumptions, expr2expr_map& bool2dep, ref<generic_model_converter>& fmc) {
     expr2expr_map dep2bool;
     ptr_vector<expr> deps;
@@ -39,22 +40,23 @@ void extract_clauses_and_dependencies(goal_ref const& g, expr_ref_vector& clause
         }
         else {
             // create clause (not d1 \/ ... \/ not dn \/ f) when the d's are the assumptions/dependencies of f.
+            //创造子句(~d1 V ~d2 V... ~dn V f)即(d1^d2...^dn -> f)，d是f的假设/依赖
             clause.reset();
             clause.push_back(f);
             deps.reset();
             m.linearize(d, deps);
-            SASSERT(!deps.empty()); // d != 0, then deps must not be empty
+            SASSERT(!deps.empty()); // d != 0, then deps must not be empty依赖不能是空集
             for (expr* d : deps) {
-                if (is_uninterp_const(d) && m.is_bool(d)) {
-                    // no need to create a fresh boolean variable for d
+                if (is_uninterp_const(d) && m.is_bool(d)) {//如果依赖d是未解释常量并且d是一个布尔变量
+                    // no need to create a fresh boolean variable for d 不需要创造一个d的新的布尔变量
                     if (!bool2dep.contains(d)) {
                         assumptions.push_back(d);
                         bool2dep.insert(d, d);
                     }
-                    clause.push_back(m.mk_not(d));
+                    clause.push_back(m.mk_not(d));//向子句中加入非d
                 }
                 else {
-                    // must normalize assumption
+                    // must normalize assumption 必须标准化假设assumption
                     expr * b = nullptr;
                     if (!dep2bool.find(d, b)) {
                         b = m.mk_fresh_const(nullptr, m.mk_bool_sort());
