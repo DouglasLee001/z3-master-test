@@ -10,6 +10,7 @@ Abstract:
     Implements the solver API by combining two solvers.
 
     This is a replacement for the strategic_solver class.
+    通过结合2个求解器来实现solver API
 
 Author:
 
@@ -42,14 +43,22 @@ Notes:
        - push is used
        - assertions are performed after a check_sat
        - parameter ignore_solver1==false
+
+       结合2个求解器来实现solver API
+       结合的求解器有2个模式：增量式和非增量式
+       如果在非增量式模式下，第一个求解器会被使用，在增量式模式下，会使用第二个
+
+       可以给第二增量式求解器制定一个时间限制，如果到达了时间限制就会调用第一个求解器
+       目标转向增量式当：
+       使用了push/在check-sat之后又用了断言/参数ignore_solver1==false
 */
 class combined_solver : public solver {
 public:
-    // Behavior when the incremental solver returns unknown.
+    // Behavior when the incremental solver returns unknown. 当增量式求解器返回unknown时的操作
     enum inc_unknown_behavior {
-        IUB_RETURN_UNDEF,      // just return unknown
-        IUB_USE_TACTIC_IF_QF,  // invoke tactic if problem is quantifier free
-        IUB_USE_TACTIC         // invoke tactic
+        IUB_RETURN_UNDEF,      // just return unknown 直接返回unknown
+        IUB_USE_TACTIC_IF_QF,  // invoke tactic if problem is quantifier free 如果问题是无量词的，则使用tactic
+        IUB_USE_TACTIC         // invoke tactic 使用tactic
     };
 
 private:
@@ -61,7 +70,7 @@ private:
     // We delay sending assertions to solver 2
     // This is relevant for big benchmarks that are meant to be solved
     // by a non-incremental solver.                                                 );
-
+    //延迟向solver 2传递断言。这与要 由非增量解算器求解的大型例子 相关。
     bool                 m_ignore_solver1;
     inc_unknown_behavior m_inc_unknown_behavior;
     unsigned             m_inc_timeout;
@@ -201,7 +210,7 @@ public:
         }
         return l_undef;
     }
-
+    //会经过这里，但是不会调用inc部分
     lbool check_sat_core(unsigned num_assumptions, expr * const * assumptions) override {
         m_check_sat_executed  = true;        
         m_use_solver1_results = false;
@@ -214,7 +223,7 @@ public:
             return m_solver2->check_sat_core(num_assumptions, assumptions);
         }
         
-        if (m_inc_mode) {
+        if (m_inc_mode) {//此处直接不会进入
             if (m_inc_timeout == UINT_MAX) {
                 IF_VERBOSE(PS_VB_LVL, verbose_stream() << "(combined-solver \"using solver 2 (without a timeout)\")\n";);            
                 lbool r = m_solver2->check_sat_core(num_assumptions, assumptions);

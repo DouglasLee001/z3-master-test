@@ -64,13 +64,15 @@ tactic * mk_qfidl_tactic(ast_manager & m, params_ref const & p) {
                                              using_params(mk_simplify_tactic(m), lhs_p),
                                              mk_propagate_values_tactic(m),
                                              mk_normalize_bounds_tactic(m),
-                                             mk_solve_eqs_tactic(m)));
+                                             mk_solve_eqs_tactic(m)));//会在此处求解等式和执行高斯消元
 
     
     
     params_ref bv_solver_p;
     // The cardinality constraint encoding generates a lot of shared if-then-else's that can be flattened.
     // Several of them are simplified to and/or. If we flat them, we increase a lot the memory consumption.
+    //基数约束编码 会生成许多公用的ITE，这些可以被展开
+    //他们中的一些可以被化简为and/or，如果展开他们就会增加很多内存开销
     bv_solver_p.set_bool("flat", false); 
     bv_solver_p.set_bool("som", false); 
     // dynamic psm seems to work well.
@@ -83,14 +85,14 @@ tactic * mk_qfidl_tactic(ast_manager & m, params_ref const & p) {
                                                mk_bit_blaster_tactic(m),
                                                mk_aig_tactic(),
                                                mk_sat_tactic(m)),
-                                      bv_solver_p);
+                                      bv_solver_p);//会在此处构造一个bv的求解器，用sat求解
 
     tactic * try2bv = 
         and_then(using_params(mk_lia2pb_tactic(m), lia2pb_p),
                  mk_propagate_ineqs_tactic(m),
                  using_params(mk_pb2bv_tactic(m), pb2bv_p),
                  fail_if(mk_not(mk_is_qfbv_probe())),
-                 bv_solver);
+                 bv_solver);//尝试用bv求解
     
     params_ref diff_neq_p;
     diff_neq_p.set_uint("diff_neq_max_k", 25);
@@ -103,7 +105,7 @@ tactic * mk_qfidl_tactic(ast_manager & m, params_ref const & p) {
                                                      try2bv,
                                                      mk_smt_tactic(m))),
                                     main_p),
-                       mk_smt_tactic(m));
+                       mk_smt_tactic(m));//如果差分不等式数量为25则用bv，否则用smt
     
     st->updt_params(p);
 

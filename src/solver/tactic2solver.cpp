@@ -11,6 +11,7 @@ Abstract:
     using a tactic.
 
     This is a light version of the strategic solver.
+    通过使用一个tactic 来实现求解器接口 的包装，这是一个轻量级版本的策略求解器
 
 Author:
 
@@ -32,6 +33,9 @@ Notes:
    Every query will be solved from scratch.  So, this is not a good
    option for applications trying to solve many easy queries that a
    similar to each other.
+   用一个tactic来模拟增量式求解器
+   每个query都会从头开始被解决。
+   所以，这 对尝试求解很多彼此相似的容易query 不好
 */
 
 namespace {
@@ -152,7 +156,7 @@ void tactic2solver::pop_core(unsigned n) {
     m_scopes.shrink(new_lvl);
     m_result = nullptr;
 }
-
+//会经过此处
 lbool tactic2solver::check_sat_core2(unsigned num_assumptions, expr * const * assumptions) {
     if (m_tactic.get() == nullptr)
         return l_false;
@@ -161,13 +165,13 @@ lbool tactic2solver::check_sat_core2(unsigned num_assumptions, expr * const * as
     m_result = alloc(simple_check_sat_result, m);
     m_tactic->cleanup();
     m_tactic->set_logic(m_logic);
-    m_tactic->updt_params(get_params()); // parameters are allowed to overwrite logic.
+    m_tactic->updt_params(get_params()); // parameters are allowed to overwrite logic. 参数被允许重写逻辑
     goal_ref g = alloc(goal, m, m_produce_proofs, m_produce_models, m_produce_unsat_cores);
 
-    for (expr* e : m_assertions) {
+    for (expr* e : m_assertions) {//将断言的表达式逐个加入到goal中
         g->assert_expr(e);
     }
-    for (unsigned i = 0; i < num_assumptions; i++) {
+    for (unsigned i = 0; i < num_assumptions; i++) {//将assumption逐个加入到goal中
         proof_ref pr(m.mk_asserted(assumptions[i]), m);
         expr_dependency_ref ans(m.mk_leaf(assumptions[i]), m);    
         g->assert_expr(assumptions[i], pr, ans);
@@ -180,7 +184,7 @@ lbool tactic2solver::check_sat_core2(unsigned num_assumptions, expr * const * as
     labels_vec labels;
     TRACE("tactic", g->display(tout););
     try {
-        switch (::check_sat(*m_tactic, g, md, labels, pr, core, reason_unknown)) {
+        switch (::check_sat(*m_tactic, g, md, labels, pr, core, reason_unknown)) {//调用tactic的check_sat
         case l_true: 
             m_result->set_status(l_true);
             break;
@@ -222,7 +226,7 @@ lbool tactic2solver::check_sat_core2(unsigned num_assumptions, expr * const * as
     m_tactic->collect_statistics(m_stats);
     m_result->m_model = md;
     m_result->m_proof = pr;
-    if (m_produce_unsat_cores) {
+    if (m_produce_unsat_cores) {//如果需要构造unsat核
         ptr_vector<expr> core_elems;
         m.linearize(core, core_elems);
         m_result->m_core.append(core_elems.size(), core_elems.c_ptr());
@@ -331,7 +335,7 @@ public:
     }
 };
 }
-
+//此处是用来注册tactic的，会在Z3 API的Z3_mk_solver_from_tactic中被调用，调用tactic2solver_factory的操作符()->mk_tactic2solver()->tactic2solver()的构造函数，其中的tactic的源头来自于to_tactic_ref(t)，t是Z3_tactic
 solver_factory * mk_tactic2solver_factory(tactic * t) {
     return alloc(tactic2solver_factory, t);
 }

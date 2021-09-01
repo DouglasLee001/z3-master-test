@@ -157,7 +157,7 @@ void exec(tactic & t, goal_ref const & in, goal_ref_buffer & result) {
     }
 }
 
-
+//经由此处
 lbool check_sat(tactic & t, goal_ref & g, model_ref & md, labels_vec & labels, proof_ref & pr, expr_dependency_ref & core, std::string & reason_unknown) {
     bool models_enabled = g->models_enabled();
     bool cores_enabled  = g->unsat_core_enabled();
@@ -167,7 +167,7 @@ lbool check_sat(tactic & t, goal_ref & g, model_ref & md, labels_vec & labels, p
     ast_manager & m = g->m();
     goal_ref_buffer r;
     try {
-        exec(t, g, r);
+        exec(t, g, r);//执行操作部分,调用tactic将g中的goal转到r中作为结果输出
     }
     catch (z3_exception & ex) {
         reason_unknown = ex.msg();
@@ -178,13 +178,13 @@ lbool check_sat(tactic & t, goal_ref & g, model_ref & md, labels_vec & labels, p
           tout << "r.size(): " << r.size() << "\n";
           for (unsigned i = 0; i < r.size(); i++) r[i]->display_with_dependencies(tout););
 
-    if (r.size() > 0) {
+    if (r.size() > 0) {//如果结果不为空，则将结果r的第1个的第一个证明作为pr
         pr = r[0]->pr(0);
         CTRACE("tactic", pr, tout << pr << "\n";);
     }
     
 
-    if (is_decided_sat(r)) {
+    if (is_decided_sat(r)) {//如果decided_sat了，则返回true
         model_converter_ref mc = r[0]->mc();            
         if (mc.get()) {
             (*mc)(labels);
@@ -200,14 +200,14 @@ lbool check_sat(tactic & t, goal_ref & g, model_ref & md, labels_vec & labels, p
         }
         return l_true;
     }
-    else if (is_decided_unsat(r)) {
+    else if (is_decided_unsat(r)) {//如果decided_unsat了，则，返回false
         goal * final = r[0];
         SASSERT(m.is_false(final->form(0)));
         pr = final->pr(0);
         if (cores_enabled)  core = final->dep(0);
         return l_false;
     }
-    else {
+    else {//否则返回undef
         if (models_enabled && !r.empty()) {
             model_converter_ref mc = r[0]->mc();            
             model_converter2model(m, mc.get(), md);

@@ -10,6 +10,9 @@ Abstract:
     Abstract tactic object.
     It used to be called assertion_set_strategy.
     The main improvement is the support for multiple subgoals.
+    抽象tactic对象
+    他被用来调用assertion_set_strategy
+    主要提升是支持了多目标
 
 Author:
 
@@ -59,6 +62,14 @@ public:
        in a goal.
        
        Therefore, in most cases, pc == 0 and core == 0 for non-branching tactics.
+       将tactic应用到goal in上
+       结果subgoal的列表被存放在result中
+       in的内容可能会在操作过程中被破坏
+
+       输出参数core被用来计算封闭subgoals的unsat core。如果禁用了依赖追踪，或者结果被确定为unsat，或者没有使用标记断言来关闭任何子目标，则core一定要为0
+
+       注意，此处的签名与论文中的不兼容：在z3中，对于每个goal中的公式，我们保留了一个proof/justification
+       因此，在大多数情况下，对于非分支tactic，pc==0并且core==0
     */
     virtual void operator()(goal_ref const & in, goal_ref_buffer& result) = 0;
 
@@ -71,7 +82,7 @@ public:
     virtual void set_logic(symbol const & l) {}
     virtual void set_progress_callback(progress_callback * callback) {}
 
-    // translate tactic to the given manager
+    // translate tactic to the given manager 将tactic转成指定的manager
     virtual tactic * translate(ast_manager & m) = 0;
 
     static void checkpoint(ast_manager& m);

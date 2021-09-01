@@ -391,6 +391,7 @@ public:
 
 // The install_tactics procedure is automatically generated for every
 // component that includes the cmd_context & tactic modules.
+//对每个包含cmd_context和tactic模块的成分，install_tactics过程会为其自动生成
 void install_tactics(tactic_manager & ctx);
 
 void install_core_tactic_cmds(cmd_context & ctx) {
