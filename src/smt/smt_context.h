@@ -51,6 +51,7 @@ Revision History:
 #include "smt/user_propagator.h"
 #include "model/model.h"
 #include "solver/progress_callback.h"
+#include "smt/idl_ls.h"
 #include <tuple>
 
 // there is a significant space overhead with allocating 1000+ contexts in
@@ -77,6 +78,7 @@ namespace smt {
 
 
     protected:
+        boolidl::bool_ls_solver     m_ls_solver;
         ast_manager &               m;
         smt_params &                m_fparams;
         params_ref                  m_params;

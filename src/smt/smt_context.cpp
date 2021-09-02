@@ -3624,6 +3624,7 @@ namespace smt {
        此处是入口函数!!
     */
     lbool context::setup_and_check(bool reset_cancel) {
+        std::cout<<"begin search context\n";
         if (!check_preamble(reset_cancel)) return l_undef;
         SASSERT(m_scope_lvl == 0);
         SASSERT(!m_setup.already_configured());
