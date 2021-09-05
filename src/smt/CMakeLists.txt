@@ -81,7 +81,6 @@ z3_add_component(smt
     user_propagator.cpp
     uses_theory.cpp
     watch_list.cpp
-    idl_ls.cpp
   COMPONENT_DEPENDENCIES
     bit_blaster
     cmd_context
@@ -97,4 +96,5 @@ z3_add_component(smt
     proto_model
     simplex
     substitution
+    idl_ls
 )
