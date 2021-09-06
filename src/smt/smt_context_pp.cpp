@@ -279,6 +279,7 @@ namespace smt {
         if (!m_b_internalized_stack.empty()) {
             out << "expression -> bool_var:\n";
             unsigned sz = m_b_internalized_stack.size();
+            m_ls_solver->make_lits_space(sz);//构造lits的空间
             for (unsigned i = 0; i < sz; i++) {
                 expr *  n  = m_b_internalized_stack.get(i);
                 bool_var v = get_bool_var_of_id(n->get_id());
@@ -288,8 +289,10 @@ namespace smt {
                 l_curr.display(out,m,m_bool_var2expr.c_ptr());//打印出bool变量对应的表达式，用空格分开
                 out<<"\n";
                 std::stringstream ss;
+                ss<< "(#" << n->get_id() << " -> " << literal(v, false) << ") "<<l_curr.var()<<" ";
                 l_curr.display(ss,m,m_bool_var2expr.c_ptr());//将布尔变量对应的表达式存放在string中
                 myString=ss.str();
+                m_ls_solver->build_lits(myString);//输入lits
             }
             out << "\n";
         }

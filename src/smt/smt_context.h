@@ -78,7 +78,7 @@ namespace smt {
 
 
     protected:
-        boolidl::bool_ls_solver     m_ls_solver;
+        boolidl::bool_ls_solver *   m_ls_solver;
         ast_manager &               m;
         smt_params &                m_fparams;
         params_ref                  m_params;
@@ -168,6 +168,7 @@ namespace smt {
 #else
         u_map<bool_var>             m_expr2bool_var;
 #endif
+        std::vector<std::vector<int> >            clauses_vec;//记录子句信息
         ptr_vector<expr>            m_bool_var2expr;         // bool_var -> expr
         signed_char_vector          m_assignment;  //!< mapping literal id -> assignment lbool
         vector<watch_list>          m_watches;     //!< per literal

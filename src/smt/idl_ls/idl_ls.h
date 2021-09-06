@@ -126,18 +126,19 @@ public:
 
     bool_ls_solver();
     bool                        parse_arguments(const int argc, char ** const argv);
-    bool                        build_instance(std::string inst);
+    void                        split_string(std::string &in_string, std::vector<std::string> &str_vec,std::string pattern);
+    void                        build_lits(std::string &in_string);
+    bool                        build_instance(std::vector<std::vector<int> >& clause_vec);
     void                        up_bool_vars();
     bool                        local_search();
     void                        print_solution(bool detailed);
     void                        make_space();
+    void                        make_lits_space(uint64_t num_lits){_num_lits=num_lits;_lits.resize(num_lits+_additional_len);};
     void                        build_neighbor_clausenum();
     inline  int64_t             get_cost();
     void                        print_formula();
-    inline  uint64_t            transfer_sym_to_var(int64_t sym);
-    inline  uint64_t            transfer_sym_to_bool_var(int sym);
-    inline  uint64_t            transfer_to_reduced_var(int v_idx);
-    inline  uint64_t            transfer_to_reduced_bool_var(int v_idx);
+    uint64_t                    transfer_name_to_var(std::string & name,bool is_idl);
+    inline  void                invert_lit(lit &l);
     inline  int                 lit_delta(lit &l);   
     void                        clear_prev_data();
     double                      TimeElapsed();

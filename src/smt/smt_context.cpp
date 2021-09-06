@@ -96,7 +96,7 @@ namespace smt {
         m_last_search_result(l_undef),
         m_last_search_failure(UNKNOWN),
         m_searching(false) {
-
+        m_ls_solver=new boolidl::bool_ls_solver();
         SASSERT(m_scope_lvl == 0);
         SASSERT(m_base_lvl == 0);
         SASSERT(m_search_lvl == 0);
@@ -3636,7 +3636,7 @@ namespace smt {
             return p(asms);
         }
 
-        internalize_assertions();//此处中间化断言，形成子句
+        internalize_assertions();//此处中间化断言，形成子句,此处加入到clauses_vec中
         expr_ref_vector theory_assumptions(m);
         add_theory_assumptions(theory_assumptions);
         if (!theory_assumptions.empty()) {//理论assumption不为空
@@ -3645,8 +3645,11 @@ namespace smt {
         }
         else {//如果理论assumption为空,例子会进入此处
             TRACE("before_search", display(tout););
-            display_expr_bool_var_map(std::cout);//在搜索开始之前打印bool变量和表达式的对应关系
+            display_expr_bool_var_map(std::cout);//在搜索开始之前打印bool变量和表达式的对应关系,在此处将布尔抽象后的文字与文字编号对应起来，即调用了build_lits
             display_assignment(std::cout);//在搜索开始之前先获取已经单元传播赋值的部分bool变量
+            m_ls_solver->build_instance(clauses_vec);
+            m_ls_solver->local_search();
+            if(m_ls_solver->_best_found_hard_cost==0){std::cout<<"local search sat\n"<<m_timer.get_seconds()<<"\n";return l_true;}
             return check_finalize(search());
         }
     }

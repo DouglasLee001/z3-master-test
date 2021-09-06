@@ -315,6 +315,10 @@ namespace smt {
             std::cout<<"( ";
             if(l.sign())std::cout<<" - ";
             std::cout<<l.var()<<" )\n";//打印断言中的单元子句!!
+            std::vector<int> clause_tmp;
+            if(l.sign()){clause_tmp.push_back(-l.var());}
+            else{clause_tmp.push_back(l.var());}
+            clauses_vec.push_back(clause_tmp);
         }
     }
 
@@ -1672,6 +1676,7 @@ namespace smt {
     }
     //构造根子句,在internalize_assertion中被调用
     void context::mk_root_clause(unsigned num_lits, literal * lits, proof * pr) {
+        std::vector<int> clause_tmp;
         if (m.proofs_enabled()) {//该例子中不使用proof
             SASSERT(m.get_fact(pr));
             expr * fact = m.get_fact(pr);
@@ -1687,11 +1692,15 @@ namespace smt {
         else {
             clause *new_cl= mk_clause(num_lits, lits, nullptr);//初始化在此处构造子句
             std::cout<<"( ";
+            clause_tmp.resize(num_lits);
             for(int i=0;i<num_lits;i++){
                 if(lits[i].sign()) std::cout<<"- ";
                 std::cout<<lits[i].var()<<" ";
+                int lit_term=(lits[i].sign())?(-lits[i].var()):(lits[i].var());
+                clause_tmp[i]=lit_term;
             }//打印断言中的子句!!
             std::cout<<")"<<std::endl;
+            clauses_vec.push_back(clause_tmp);
         }
     }
 

@@ -2,66 +2,33 @@
 namespace boolidl{
 
 bool_ls_solver::bool_ls_solver(){
+    h_inc=1;
+    softclause_weight_threshold=1;
     _additional_len=10;
     _max_tries=1;
     _max_step=UINT64_MAX;
     _swt_p=0.7;
     _swt_threshold=50;
     smooth_probability=3;
+    _random_seed=1;
+    mt.seed(_random_seed);
+    _cutoff=100;
+    CCmode=-1;
 }
 
-uint64_t bool_ls_solver::transfer_sym_to_var(int64_t sym){
-    if(sym2var.find(sym)==sym2var.end()){
-        sym2var[sym]=_resolution_vars.size();
+uint64_t bool_ls_solver::transfer_name_to_var(std::string & name,bool is_idl){
+    if(name2var.find(name)==name2var.end()){
+        name2var[name]=_vars.size();
         variable var;
-        var.is_idl=true;
-        // var.var_name=syntaxTree::symbol_table.str(sym);
-        _resolution_vars.push_back(var);
-        idl_var_vec.push_back(_resolution_vars.size()-1);
-        if(sym==0){ref_zero=(int)_resolution_vars.size()-1;}
-        return _resolution_vars.size()-1;
-    }
-    else return sym2var[sym];
-}
-
-uint64_t bool_ls_solver::transfer_sym_to_bool_var(int sym){
-    int sym_abs=abs(sym);
-    if(sym2bool_var.find(sym_abs)==sym2bool_var.end()){
-        sym2bool_var[sym_abs]=_resolution_vars.size();
-        variable var;
-        var.is_idl=false;
+        var.is_idl=is_idl;
         var.clause_idxs.reserve(64);
-        // var.var_name=syntaxTree::symbol_table.str(sym_abs);
-        _resolution_vars.push_back(var);
-        bool_var_vec.push_back(_resolution_vars.size()-1);
-        return _resolution_vars.size()-1;
-    }
-    else return sym2bool_var[sym_abs];
-}
-
-uint64_t bool_ls_solver::transfer_to_reduced_var(int v_idx){
-    if(sym2var.find(v_idx)==sym2var.end()){
-        sym2var[v_idx]=_vars.size();
-        variable var;
-        var.is_idl=true;
-        var.var_name=_resolution_vars[v_idx].var_name;
+        var.var_name=name;
         _vars.push_back(var);
-        idl_var_vec.push_back(_vars.size()-1);
+        if(is_idl){idl_var_vec.push_back(_vars.size()-1);}
+        else{bool_var_vec.push_back(_vars.size()-1);}
         return _vars.size()-1;
     }
-    else return sym2var[v_idx];
-}
-uint64_t bool_ls_solver::transfer_to_reduced_bool_var(int v_idx){
-    if(sym2bool_var.find(v_idx)==sym2bool_var.end()){
-        sym2bool_var[v_idx]=_vars.size();
-        variable var;
-        var.is_idl=false;
-        var.var_name=_resolution_vars[v_idx].var_name;
-        _vars.push_back(var);
-        bool_var_vec.push_back(_vars.size()-1);
-        return _vars.size()-1;
-    }
-    else return sym2bool_var[v_idx];
+    else return name2var[name];
 }
 
 void bool_ls_solver::make_space(){
@@ -141,57 +108,61 @@ void bool_ls_solver::build_neighbor_clausenum(){
         }
     }
 }
+void bool_ls_solver::split_string(std::string &in_string, std::vector<std::string> &str_vec,std::string pattern=" "){
+    std::string::size_type pos;
+    in_string+=pattern;
+    size_t size=in_string.size();
+    for(size_t i=0; i<size; i++){
+    pos=in_string.find(pattern,i);
+    if(pos<size){
+        std::string s=in_string.substr(i,pos-i);
+        str_vec.push_back(s);
+        i=pos+pattern.size()-1;
+        }
+    }
+}
 
-bool bool_ls_solver::build_instance(std::string inst){
+void bool_ls_solver::build_lits(std::string & in_string){
+    std::vector<std::string> vec;
+    split_string(in_string, vec);
+    if(vec[3]=="0")return;
+    int lit_index=std::atoi(vec[3].c_str());
+    int k=std::atoi(vec[15].c_str());
+    uint64_t pre=transfer_name_to_var(vec[8],true);
+    uint64_t pos=transfer_name_to_var(vec[12],true);
+    lit l;
+    if(vec[5]==">="){std::swap(pre, pos);k=-k;}
+    l.prevar_idx=pre;l.posvar_idx=pos;l.key=k;l.is_idl_lit=true;
+    _lits[lit_index]=l;
+}
+
+bool bool_ls_solver::build_instance(std::vector<std::vector<int> >& clause_vec){
     _average_k_value=0;
-    _num_lits=0;
     int num_idl_lit=0;
-    h_inc=1;
-    softclause_weight_threshold=1;
-//    skeleton.print_formular();
-    // for (auto &cl : skeleton.formular_) {
-    //     if(cl.size()==0)
-    //         continue;
-    //     clause cur_clause;
-    //     uint64_t last_clause_index=_clauses.size();
-    //     bool exist_true=false;
-    //     for (auto l : cl) {
-    //         _num_lits++;
-    //         lit curlit;
-    //         if(l.is_idl){
-    //             num_idl_lit++;
-    //         curlit.is_idl_lit=true;
-    //         uint64_t pre=transfer_sym_to_var(l.a);
-    //         uint64_t pos=transfer_sym_to_var(l.b);
-    //         curlit.prevar_idx=pre;
-    //         curlit.posvar_idx=pos;
-    //         curlit.key=l.k;
-    //         _average_k_value+=abs(curlit.key);
-    //         }
-    //         else if(l.true_false==0){
-    //             curlit.is_idl_lit=false;
-    //             uint64_t bool_var_idx=transfer_sym_to_bool_var((int)l.a);
-    //             curlit.prevar_idx=bool_var_idx;
-    //             curlit.key=l.k;
-    //             _resolution_vars[bool_var_idx].clause_idxs.push_back((int)last_clause_index);
-    //         }
-    //         else if(l.true_false==-1){continue;}// if there exists a false in a clause, pass it
-    //         else if(l.true_false==1){exist_true=true;break;}//if there exists a true in a clause, the clause should not be added
-    //         cur_clause.literals.push_back(curlit);
-    //         cur_clause.is_hard=true;
-    //         cur_clause.weight=1;
-    //     }
-    //     if(!exist_true){_clauses.push_back(cur_clause);}
-    // }
-    if(sym2var.find(0)!=sym2var.end()){fix_0_var_idx=sym2var[0];}
-    _num_clauses=_clauses.size();
-//    uint64_t origin_num_clause=_num_clauses;
-//    uint64_t origin_num_bool_var=bool_var_vec.size();
+    _num_clauses=clause_vec.size();
+    _clauses.resize(_num_clauses);
+    for (uint64_t clause_index=0;clause_index<_num_clauses;clause_index++) {
+         clause cur_clause;
+         for (auto l_idx : clause_vec[clause_index]) {
+             lit curlit;
+             if(l_idx<0){curlit=_lits[-l_idx];invert_lit(curlit);}
+             else{curlit=_lits[l_idx];}
+             curlit.clause_idx=clause_index;
+             if(curlit.is_idl_lit){
+                 num_idl_lit++;
+                 _average_k_value+=abs(curlit.key);
+                 cur_clause.idl_literals.push_back(curlit);
+                 _vars[curlit.posvar_idx].literals.push_back(curlit);
+             }
+             else{cur_clause.bool_literals.push_back(curlit);}
+             cur_clause.literals.push_back(curlit);
+             _vars[curlit.prevar_idx].literals.push_back(curlit);
+         }
+         cur_clause.is_hard=true;
+         cur_clause.weight=1;
+         _clauses[clause_index]=cur_clause;
+     }
 //    print_formula();
-//    cout<<"*********\n";
-//    cout<<"origin clause num: "<<origin_num_clause<<endl;
-//    cout<<"origin bool var:"<<origin_num_bool_var<<endl<<"new bool var:"<<bool_var_vec.size()<<endl;
-    _num_clauses=_clauses.size();
     _num_vars=_vars.size();
     _num_bool_vars=bool_var_vec.size();
     _num_idl_vars=idl_var_vec.size();
@@ -437,6 +408,16 @@ int bool_ls_solver::lit_delta(lit& l){
         if((_solution[l.prevar_idx]>0&&l.key>0)||(_solution[l.prevar_idx]<0&&l.key<0))return 0;
         else return 1;// 1 or average_k
     }
+}
+/**************invert a lit****************/
+void bool_ls_solver::invert_lit(lit &l){
+    if (l.is_idl_lit){
+        uint64_t tmp_idx=l.prevar_idx;
+        l.prevar_idx=l.posvar_idx;
+        l.posvar_idx=tmp_idx;
+        l.key=-1-l.key;
+    }
+    else{l.key*=-1;}
 }
 
 /**********modify the CClist***********/
@@ -1200,5 +1181,3 @@ bool bool_ls_solver::local_search(){
     return false;
 }
 };
-
-
