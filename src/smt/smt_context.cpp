@@ -3282,6 +3282,7 @@ namespace smt {
         if (!m_asserted_formulas.inconsistent()) {//如果断言的公式不是不一致的
             unsigned sz    = m_asserted_formulas.get_num_formulas();//sz是公式数量
             unsigned qhead = m_asserted_formulas.get_qhead();//qhead指向公式的第一个
+            // std::cout<<sz-qhead<<"\n";
             while (qhead < sz) {//遍历所有公式
                 if (get_cancel_flag()) {
                     m_asserted_formulas.commit(qhead);
@@ -3624,7 +3625,7 @@ namespace smt {
        此处是入口函数!!
     */
     lbool context::setup_and_check(bool reset_cancel) {
-        std::cout<<"begin search context\n";
+        // std::cout<<"begin search context\n";
         if (!check_preamble(reset_cancel)) return l_undef;
         SASSERT(m_scope_lvl == 0);
         SASSERT(!m_setup.already_configured());
@@ -3646,10 +3647,9 @@ namespace smt {
         else {//如果理论assumption为空,例子会进入此处
             TRACE("before_search", display(tout););
             display_expr_bool_var_map(std::cout);//在搜索开始之前打印bool变量和表达式的对应关系,在此处将布尔抽象后的文字与文字编号对应起来，即调用了build_lits
-            display_assignment(std::cout);//在搜索开始之前先获取已经单元传播赋值的部分bool变量
+            // display_assignment(std::cout);//在搜索开始之前先获取已经单元传播赋值的部分bool变量
             m_ls_solver->build_instance(clauses_vec);
-            m_ls_solver->local_search();
-            if(m_ls_solver->_best_found_hard_cost==0){std::cout<<"local search sat\n"<<m_timer.get_seconds()<<"\n";return l_true;}
+
             return check_finalize(search());
         }
     }
@@ -3823,7 +3823,8 @@ namespace smt {
         TRACE("search_lite", tout << "searching...\n";);
         lbool    status            = l_undef;
         unsigned curr_lvl          = m_scope_lvl;
-
+        int restart_time=1;
+        bool ls_flag=false;
         while (true) {
             SASSERT(!inconsistent());
 
@@ -3831,7 +3832,12 @@ namespace smt {
             TRACE("search_bug", tout << "status: " << status << ", inconsistent: " << inconsistent() << "\n";);
             TRACE("assigned_literals_per_lvl", display_num_assigned_literals_per_lvl(tout);
                   tout << ", num_assigned: " << m_assigned_literals.size() << "\n";);
-
+            if(!ls_flag&&m_timer.get_seconds()>10){
+                ls_flag=true;
+                m_ls_solver->local_search();
+                if(m_ls_solver->_best_found_hard_cost==0){std::cout<<"local search sat\n"<<m_timer.get_seconds()<<"\n";return l_true;}
+            }
+            // std::cout<<"restart_time "<<restart_time++<<"  time: "<<m_timer.get_seconds()<<"\n";
             if (!restart(status, curr_lvl)) {//如果受限搜索结束了就调用重启
                 break;
             }            

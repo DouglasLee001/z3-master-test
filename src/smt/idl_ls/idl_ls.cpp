@@ -12,7 +12,7 @@ bool_ls_solver::bool_ls_solver(){
     smooth_probability=3;
     _random_seed=1;
     mt.seed(_random_seed);
-    _cutoff=100;
+    _cutoff=600;
     CCmode=-1;
 }
 
@@ -49,6 +49,8 @@ void bool_ls_solver::make_space(){
     construct_unsat.resize(_num_clauses);
     last_move.resize(_num_vars*2+_additional_len);
     sat_num_one_clauses=new Array((int)_num_clauses);
+    cdcl_lit_with_assigned_var=new Array(2*(int)_num_lits+(int)_additional_len);
+    cdcl_lit_unsolved=new Array(2*(int)_num_lits+(int)_additional_len);
     is_chosen_bool_var.resize(_num_vars+_additional_len,false);
 }
 /// build neighbor_var_idxs for each var
@@ -127,12 +129,22 @@ void bool_ls_solver::build_lits(std::string & in_string){
     split_string(in_string, vec);
     if(vec[3]=="0")return;
     int lit_index=std::atoi(vec[3].c_str());
-    int k=std::atoi(vec[15].c_str());
-    uint64_t pre=transfer_name_to_var(vec[8],true);
-    uint64_t pos=transfer_name_to_var(vec[12],true);
+    uint64_t pos,pre;
+    int k;
+    if(vec.size()>9){
+        k=std::atoi(vec[15].c_str());
+        pos=transfer_name_to_var(vec[12],true);
+        pre=transfer_name_to_var(vec[8],true);
+    }
+    else{
+        k=std::atoi(vec[7].c_str());
+        std::string ref_zero="__ref__zero__";
+        pos=transfer_name_to_var(ref_zero, true);
+        pre=transfer_name_to_var(vec[6], true);
+    }
     lit l;
     if(vec[5]==">="){std::swap(pre, pos);k=-k;}
-    l.prevar_idx=pre;l.posvar_idx=pos;l.key=k;l.is_idl_lit=true;
+    l.prevar_idx=pre;l.posvar_idx=pos;l.key=k;l.is_idl_lit=true;l.lits_index=lit_index;
     _lits[lit_index]=l;
 }
 
@@ -234,16 +246,28 @@ void bool_ls_solver::initialize(){
 }
 
 /**********restart construction***********/
+void bool_ls_solver::record_cdcl_lits(std::vector<int> & cdcl_lits){
+    cdcl_lit_with_assigned_var->clear();
+    cdcl_lit_unsolved->clear();
+    for(int l:cdcl_lits){cdcl_lit_unsolved->insert_element(l+(int)_num_lits);}//in order to make sure that elements inserted are non-negative
+}
 
 void bool_ls_solver::construct_slution_score(){
     fill(var_is_assigned.begin(), var_is_assigned.end(), 0);
     fill(construct_unsat.begin(), construct_unsat.end(), 0);
     unsat_clause_with_assigned_var->clear();
+    //TODO:: first assign the boolean var of cdcl value
     uint64_t var_idx=idl_var_vec[mt()%idl_var_vec.size()];//first choose an idl var, assign it to 0
     int     best_value=0;
     var_is_assigned[var_idx]=1;
     _solution[var_idx]=best_value;
     for(uint64_t i: _vars[var_idx].clause_idxs){unsat_clause_with_assigned_var->insert_element(int (i));}
+    for(lit l:_vars[var_idx].literals){
+        int l_idx=l.lits_index+(int)_num_lits;
+        int neg_l_idx=-l.lits_index+(int)_num_lits;
+        if(cdcl_lit_unsolved->is_in_array(l_idx)){cdcl_lit_unsolved->delete_element(l_idx);cdcl_lit_with_assigned_var->insert_element(l_idx);}//transfer the lit from unsolved to assigned var
+        else if(cdcl_lit_unsolved->is_in_array(neg_l_idx)){cdcl_lit_unsolved->delete_element(neg_l_idx);cdcl_lit_with_assigned_var->insert_element(neg_l_idx);}
+    }
     for(int i=1;i<_num_vars;i++){
         var_idx=pick_construct_idx(best_value);
         construct_move((int)var_idx, best_value);
@@ -256,6 +280,15 @@ uint64_t bool_ls_solver::pick_construct_idx(int &best_value){
     best_score=INT32_MIN;
     best_value=0;
     int operation_idx=0;
+    for(int i=0;i<cdcl_lit_with_assigned_var->size();i++){
+        int l_index=cdcl_lit_with_assigned_var->element_at(i)-(int)_num_lits;//l_index is the index of lit (maybe negative)
+        lit l=_lits[std::abs(l_index)];
+        if(l_index<0){invert_lit(l);}//l is the corresponding lit
+        if(l.is_idl_lit){
+            if(var_is_assigned[l.prevar_idx]==0&&var_is_assigned[l.posvar_idx]){operation_vec[operation_idx++]=(l.key+_solution[l.posvar_idx])*(int)_num_vars+(int)l.prevar_idx;}
+            else if(var_is_assigned[l.posvar_idx]==0&&var_is_assigned[l.prevar_idx]==1){operation_vec[operation_idx++]=(-l.key+_solution[l.prevar_idx])*(int)_num_vars+(int)l.posvar_idx;}
+        }//no need to handle the boolean var, since they are assigned as the cdcl lits before construction
+    }
     for(int i=0;i<unsat_clause_with_assigned_var->size();i++){
         clause *cl=&(_clauses[unsat_clause_with_assigned_var->element_at(i)]);
         for(lit l:cl->literals){
@@ -319,6 +352,16 @@ int bool_ls_solver::construct_score(int var_idx, int value){
             last_sat_clause_idx=l.clause_idx;
         }
     }
+        for(lit l:var->literals){
+            int l_idx=l.lits_index+(int)_num_lits;
+            int neg_l_idx=(-l.lits_index)+(int)_num_lits;
+            if((!cdcl_lit_with_assigned_var->is_in_array(l_idx))&&(!cdcl_lit_with_assigned_var->is_in_array(neg_l_idx))){continue;}//the assignment will not affect the truth of cdcl lit
+            bool is_in_cdcl,mk_true;
+            is_in_cdcl=cdcl_lit_with_assigned_var->is_in_array(l_idx);//this lit(neg) is in cdcl
+            mk_true=(((int)l.posvar_idx==var_idx&&(value>=(_solution[l.prevar_idx]-l.key))) || ((int)l.prevar_idx==var_idx&&(value<=(_solution[l.posvar_idx]+l.key))) );//this lit can be made true(false)
+            if(is_in_cdcl==mk_true){score+=10;}//the lit and its neg cannot appear simultaneously, since that is boolean inconsistent
+            else{score-=10;}
+        }
     }
     else{
         for(uint64_t i=0;i<var->literals.size();i++){
@@ -358,6 +401,22 @@ void bool_ls_solver::construct_move(int var_idx, int value){
     for(uint64_t clause_idx:_vars[var_idx].clause_idxs){
         if(construct_unsat[clause_idx]==0){unsat_clause_with_assigned_var->insert_element((int)clause_idx);}
         else{unsat_clause_with_assigned_var->delete_element((int)clause_idx);}
+    }
+    if(var->is_idl){
+        for(lit l:_vars[var_idx].literals){
+            int l_idx=l.lits_index+(int)_num_lits;
+            int neg_l_idx=-l.lits_index+(int)_num_lits;
+            if(cdcl_lit_unsolved->is_in_array(l_idx)){cdcl_lit_unsolved->delete_element(l_idx);cdcl_lit_with_assigned_var->insert_element(l_idx);}
+            else if(cdcl_lit_unsolved->is_in_array(neg_l_idx)){cdcl_lit_unsolved->delete_element(neg_l_idx);cdcl_lit_with_assigned_var->insert_element(neg_l_idx);}//assign the first var in cdcl lit
+            else if(cdcl_lit_with_assigned_var->is_in_array(l_idx)){cdcl_lit_with_assigned_var->delete_element(l_idx);}
+            else if(cdcl_lit_with_assigned_var->is_in_array(neg_l_idx)){cdcl_lit_with_assigned_var->delete_element(neg_l_idx);}//assign the second var in cdcl lit
+        }
+    }
+    else{
+        for(lit l:_vars[var_idx].literals){
+            cdcl_lit_unsolved->delete_element(l.lits_index+(int)_num_lits);
+            cdcl_lit_unsolved->delete_element(-l.lits_index+(int)_num_lits);
+        }
     }
     _solution[var_idx]=value;
     var_is_assigned[var_idx]=1;
@@ -418,6 +477,7 @@ void bool_ls_solver::invert_lit(lit &l){
         l.key=-1-l.key;
     }
     else{l.key*=-1;}
+    l.lits_index=-l.lits_index;
 }
 
 /**********modify the CClist***********/

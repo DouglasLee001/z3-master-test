@@ -194,9 +194,9 @@ public:
             if (m_ctx->canceled()) {                
                 throw tactic_exception(Z3_CANCELED_MSG);
             }//目前已经将子句放进了m_ctx的断言中
-            std::cout<<"\nbefore invoke context, the asserted formula:\n";
-            m_ctx->display(std::cout);
-            std::cout<<"\n\n";
+            // std::cout<<"\nbefore invoke context, the asserted formula:\n";
+            // m_ctx->display(std::cout);
+            // std::cout<<"\n\n";
             lbool r;
             try {
                 if (assumptions.empty())

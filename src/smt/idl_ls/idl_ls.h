@@ -26,6 +26,7 @@ struct lit{
     int                         key;
     uint64_t                    clause_idx;
     bool                        is_idl_lit;
+    int                         lits_index;//store the index in _lits
 };
 
 struct variable{
@@ -139,7 +140,7 @@ public:
     void                        print_formula();
     uint64_t                    transfer_name_to_var(std::string & name,bool is_idl);
     inline  void                invert_lit(lit &l);
-    inline  int                 lit_delta(lit &l);   
+    inline  int                 lit_delta(lit &l);
     void                        clear_prev_data();
     double                      TimeElapsed();
 
@@ -160,6 +161,9 @@ public:
     
     //restart construction
     Array                        *unsat_clause_with_assigned_var;//unsat clause with at least one assigned var
+    Array                        *cdcl_lit_with_assigned_var;//unsat cdcl lits with only one assigned var, pick critical move from this set
+    Array                        *cdcl_lit_unsolved;//unsolved cdcl lits(unsolved->assigned_var->true/false)
+    void                         record_cdcl_lits(std::vector<int> & cdcl_lits);
     std::vector<int>             var_is_assigned;//0 means the var is not assigned
     std::vector<int>             construct_unsat;//0 means the clause is unsat
     void                         construct_slution_score();//construct the solution based on score
