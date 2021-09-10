@@ -131,20 +131,28 @@ void bool_ls_solver::build_lits(std::string & in_string){
     int lit_index=std::atoi(vec[3].c_str());
     uint64_t pos,pre;
     int k;
-    if(vec.size()>9){
-        k=std::atoi(vec[15].c_str());
-        pos=transfer_name_to_var(vec[12],true);
-        pre=transfer_name_to_var(vec[8],true);
-    }
-    else{
-        k=std::atoi(vec[7].c_str());
-        std::string ref_zero="__ref__zero__";
-        pos=transfer_name_to_var(ref_zero, true);
-        pre=transfer_name_to_var(vec[6], true);
-    }
     lit l;
-    if(vec[5]==">="){std::swap(pre, pos);k=-k;}
-    l.prevar_idx=pre;l.posvar_idx=pos;l.key=k;l.is_idl_lit=true;l.lits_index=lit_index;
+    if(vec.size()>5){
+        if(vec.size()>9){
+            k=std::atoi(vec[15].c_str());
+            pos=transfer_name_to_var(vec[12],true);
+            pre=transfer_name_to_var(vec[8],true);
+        }
+        else{
+            k=std::atoi(vec[7].c_str());
+            std::string ref_zero="__ref__zero__";
+            pos=transfer_name_to_var(ref_zero, true);
+            pre=transfer_name_to_var(vec[6], true);
+        }
+        if(vec[5]==">="){std::swap(pre, pos);k=-k;}
+        l.prevar_idx=pre;l.posvar_idx=pos;l.key=k;l.is_idl_lit=true;
+    }//idl lit
+    else{
+        l.prevar_idx=transfer_name_to_var(vec[4], false);
+        l.key=1;
+        l.is_idl_lit=false;
+    }//boolean lit
+    l.lits_index=lit_index;
     _lits[lit_index]=l;
 }
 
