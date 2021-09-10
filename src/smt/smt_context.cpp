@@ -40,6 +40,7 @@ Revision History:
 #include "smt/smt_model_finder.h"
 #include "smt/smt_parallel.h"
 #include "smt/smt_arith_value.h"
+#define IDL_DEBUG
 
 namespace smt {
 
@@ -3649,7 +3650,11 @@ namespace smt {
             display_expr_bool_var_map(std::cout);//在搜索开始之前打印bool变量和表达式的对应关系,在此处将布尔抽象后的文字与文字编号对应起来，即调用了build_lits
             // display_assignment(std::cout);//在搜索开始之前先获取已经单元传播赋值的部分bool变量
             m_ls_solver->build_instance(clauses_vec);
-
+#ifdef IDL_DEBUG
+                std::cout<<"after builid instance\n";
+                m_ls_solver->local_search();
+                if(m_ls_solver->_best_found_hard_cost==0){std::cout<<"local search sat\n"<<m_timer.get_seconds()<<"\n";return l_true;}
+#endif
             return check_finalize(search());
         }
     }
@@ -3833,9 +3838,15 @@ namespace smt {
             TRACE("assigned_literals_per_lvl", display_num_assigned_literals_per_lvl(tout);
                   tout << ", num_assigned: " << m_assigned_literals.size() << "\n";);
             if(!ls_flag&&m_timer.get_seconds()>10){
+#ifdef IDL_DEBUG
+                std::cout<<"begin local search  "<<m_timer.get_seconds()<<"\n";
+#endif
                 ls_flag=true;
                 m_ls_solver->local_search();
                 if(m_ls_solver->_best_found_hard_cost==0){std::cout<<"local search sat\n"<<m_timer.get_seconds()<<"\n";return l_true;}
+#ifdef IDL_DEBUG
+                std::cout<<"end local search  "<<m_timer.get_seconds()<<"\n";
+#endif
             }
             // std::cout<<"restart_time "<<restart_time++<<"  time: "<<m_timer.get_seconds()<<"\n";
             if (!restart(status, curr_lvl)) {//如果受限搜索结束了就调用重启
