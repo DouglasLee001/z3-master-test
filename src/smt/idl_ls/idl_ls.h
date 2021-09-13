@@ -26,7 +26,7 @@ struct lit{
     int                         key;
     uint64_t                    clause_idx;
     bool                        is_idl_lit;
-    int                         lits_index;//store the index in _lits
+    int                         lits_index;//store the index in _lits, 0 means the lit is true
 };
 
 struct variable{
@@ -38,6 +38,8 @@ struct variable{
     int                         score;// if it is a bool var, then the score is calculated beforehand
     std::string                 var_name;
     bool                        is_idl;
+    bool                        is_delete=false;
+    int up_bool=0;//the bool value of variables deleted(1 true -1 false)
 };
 
 struct clause{
@@ -51,6 +53,7 @@ struct clause{
     lit                         watch_lit;//the lit with smallest delta
     lit                         last_true_lit;//the last true lit in a falsified clause
     int                         min_delta;
+    bool                        is_delete=false;
 };
 
 class bool_ls_solver{
@@ -88,6 +91,7 @@ public:
 
     //data structure
     std::vector<clause>         _clauses;
+    std::stack<clause>           _reconstruct_stack;
     std::vector<variable>       _vars;
     std::vector<variable>       _resolution_vars;
     std::vector<lit>            _lits;
@@ -139,10 +143,19 @@ public:
     inline  int64_t             get_cost();
     void                        print_formula();
     uint64_t                    transfer_name_to_var(std::string & name,bool is_idl);
+    uint64_t                    transfer_to_reduced_var(int v_idx);
+    uint64_t                    transfer_to_reduced_bool_var(int v_idx);
     inline  void                invert_lit(lit &l);
     inline  int                 lit_delta(lit &l);
     void                        clear_prev_data();
     double                      TimeElapsed();
+    //resolution
+    void                        resolution();
+    bool                        is_equal(lit &l1,lit & l2);
+    bool                        is_neg(lit &l1,lit &l2);
+    //unit prop
+    void                        unit_prop();
+    void                        reduce_clause();//reduce the deleted clauses and vars
 
     //main functions
     void                        initialize();

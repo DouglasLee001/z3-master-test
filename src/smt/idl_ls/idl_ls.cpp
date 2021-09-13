@@ -18,15 +18,15 @@ bool_ls_solver::bool_ls_solver(){
 
 uint64_t bool_ls_solver::transfer_name_to_var(std::string & name,bool is_idl){
     if(name2var.find(name)==name2var.end()){
-        name2var[name]=_vars.size();
+        name2var[name]=_resolution_vars.size();
         variable var;
         var.is_idl=is_idl;
         var.clause_idxs.reserve(64);
         var.var_name=name;
-        _vars.push_back(var);
-        if(is_idl){idl_var_vec.push_back(_vars.size()-1);}
-        else{bool_var_vec.push_back(_vars.size()-1);}
-        return _vars.size()-1;
+        _resolution_vars.push_back(var);
+        if(is_idl){idl_var_vec.push_back(_resolution_vars.size()-1);}
+        else{bool_var_vec.push_back(_resolution_vars.size()-1);}
+        return _resolution_vars.size()-1;
     }
     else return name2var[name];
 }
@@ -127,8 +127,9 @@ void bool_ls_solver::split_string(std::string &in_string, std::vector<std::strin
 void bool_ls_solver::build_lits(std::string & in_string){
     std::vector<std::string> vec;
     split_string(in_string, vec);
-    if(vec[3]=="0")return;
+    if(vec[3]=="0"){_lits[0].lits_index=0; return;}
     int lit_index=std::atoi(vec[3].c_str());
+    if(vec[4][1]=='!'){_lits[lit_index].lits_index=0;return;}//lits index==0 means that the lit is true
     uint64_t pos,pre;
     int k;
     lit l;
@@ -159,30 +160,36 @@ void bool_ls_solver::build_lits(std::string & in_string){
 bool bool_ls_solver::build_instance(std::vector<std::vector<int> >& clause_vec){
     _average_k_value=0;
     int num_idl_lit=0;
-    _num_clauses=clause_vec.size();
-    _clauses.resize(_num_clauses);
-    for (uint64_t clause_index=0;clause_index<_num_clauses;clause_index++) {
-         clause cur_clause;
-         for (auto l_idx : clause_vec[clause_index]) {
-             lit curlit;
-             if(l_idx<0){curlit=_lits[-l_idx];invert_lit(curlit);}
-             else{curlit=_lits[l_idx];}
-             curlit.clause_idx=clause_index;
-             if(curlit.is_idl_lit){
-                 num_idl_lit++;
-                 _average_k_value+=abs(curlit.key);
-                 cur_clause.idl_literals.push_back(curlit);
-                 _vars[curlit.posvar_idx].literals.push_back(curlit);
-             }
-             else{cur_clause.bool_literals.push_back(curlit);}
-             cur_clause.literals.push_back(curlit);
-             _vars[curlit.prevar_idx].literals.push_back(curlit);
-         }
-         cur_clause.is_hard=true;
-         cur_clause.weight=1;
-         _clauses[clause_index]=cur_clause;
-     }
-//    print_formula();
+    _clauses.reserve(clause_vec.size());
+    for (auto clause_curr:clause_vec) {
+        clause cur_clause;
+        bool is_tautology=false;
+        for (auto l_idx : clause_curr) {if(_lits[std::abs(l_idx)].lits_index==0){is_tautology=true;break;}}
+        if(is_tautology){continue;}
+        for (auto l_idx : clause_curr) {
+            if(l_idx==0){is_tautology=true;break;}
+            lit curlit;
+            if(l_idx<0){curlit=_lits[-l_idx];invert_lit(curlit);}
+            else{curlit=_lits[l_idx];}
+            if(curlit.is_idl_lit){
+                num_idl_lit++;
+                _average_k_value+=abs(curlit.key);
+            }
+            else{_resolution_vars[curlit.prevar_idx].clause_idxs.push_back(_clauses.size());}
+            cur_clause.literals.push_back(curlit);
+            cur_clause.is_hard=true;
+            cur_clause.weight=1;
+        }
+        _clauses.push_back(cur_clause);
+    }
+    _num_clauses=_clauses.size();
+    unit_prop();
+    resolution();
+    unit_prop();
+    reduce_clause();
+    // print_formula();
+    // std::cout<<"bool var num: "<<bool_var_vec.size()<<"\n";
+    _num_clauses=_clauses.size();
     _num_vars=_vars.size();
     _num_bool_vars=bool_var_vec.size();
     _num_idl_vars=idl_var_vec.size();
@@ -195,6 +202,262 @@ bool bool_ls_solver::build_instance(std::vector<std::vector<int> >& clause_vec){
     _best_found_soft_cost=0;
     return true;
 }
+//resolution
+void bool_ls_solver::resolution(){
+    std::vector<uint64_t> pos_clauses(10*_num_clauses);
+    std::vector<uint64_t> neg_clauses(10*_num_clauses);
+    int pos_clause_size,neg_clause_size;
+    bool is_improve=true;
+    while(is_improve){
+        is_improve=false;
+    for(uint64_t bool_var_idx:bool_var_vec){
+        if(_resolution_vars[bool_var_idx].is_delete)continue;
+        pos_clause_size=0;neg_clause_size=0;
+        for(int i=0;i<_resolution_vars[bool_var_idx].clause_idxs.size();i++){
+            uint64_t clause_idx=_resolution_vars[bool_var_idx].clause_idxs[i];
+            if(_clauses[clause_idx].is_delete)continue;
+            for(lit l:_clauses[clause_idx].literals){
+                if(l.prevar_idx==bool_var_idx){
+                    if(l.key>0){pos_clauses[pos_clause_size++]=clause_idx;}
+                    else{neg_clauses[neg_clause_size++]=clause_idx;}
+                    break;
+                }
+            }
+        }//determine the pos_clause and neg_clause
+        int tautology_num=0;
+        for(int i=0;i<pos_clause_size;i++){//pos clause X neg clause
+            uint64_t pos_clause_idx=pos_clauses[i];
+            for(int j=0;j<neg_clause_size;j++){
+                uint64_t neg_clause_idx=neg_clauses[j];
+                for(int k=0;k<_clauses[neg_clause_idx].literals.size();k++){
+                    lit l=_clauses[neg_clause_idx].literals[k];
+                    if(l.prevar_idx!=bool_var_idx){//the bool_var for resolution is not considered
+                        for(uint64_t x=0;x<_clauses[pos_clause_idx].literals.size();x++){
+                            if(is_neg(l, _clauses[pos_clause_idx].literals[x])){
+                                tautology_num++;
+                                break;
+                            }//if there exists (aVb)^(-aV-b), the new clause is tautology
+                        }
+                    }
+                }
+            }
+        }
+        if((pos_clause_size*neg_clause_size-tautology_num)>(pos_clause_size+neg_clause_size)){continue;}//if deleting the var can cause 2 times clauses, then skip it
+        for(uint64_t clause_idx:_resolution_vars[bool_var_idx].clause_idxs){//delete the clauses of bool_var
+            _clauses[clause_idx].is_delete=true;
+            for(lit l:_clauses[clause_idx].literals){//delete the clause from corresponding bool var
+                if(!l.is_idl_lit&&l.prevar_idx!=bool_var_idx){
+                    uint64_t delete_idx=0;
+                    for(;delete_idx<_resolution_vars[l.prevar_idx].clause_idxs.size();delete_idx++){
+                        if(_resolution_vars[l.prevar_idx].clause_idxs[delete_idx]==clause_idx){
+                            _resolution_vars[l.prevar_idx].clause_idxs[delete_idx]=_resolution_vars[l.prevar_idx].clause_idxs.back();
+                            _resolution_vars[l.prevar_idx].clause_idxs.pop_back();
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+        is_improve=true;
+        _resolution_vars[bool_var_idx].is_delete=true;
+        if(pos_clause_size==0){_resolution_vars[bool_var_idx].up_bool=-1;}//if it is a false pure lit, the var is set to false
+        if(neg_clause_size==0){_resolution_vars[bool_var_idx].up_bool=1;}//if it is a true pure lit, the var is set to true
+        if(pos_clause_size==0||neg_clause_size==0)continue;//pos or neg clause is empty, meaning the clauses are SAT when assigned to true or false, then cannot resolute, just delete the clause
+        for(int i=0;i<pos_clause_size;i++){//pos clause X neg clause
+            uint64_t pos_clause_idx=pos_clauses[i];
+            for(int j=0;j<neg_clause_size;j++){
+                uint64_t neg_clause_idx=neg_clauses[j];
+                clause new_clause;
+                uint64_t pos_lit_size=_clauses[pos_clause_idx].literals.size();
+                uint64_t neg_lit_size=_clauses[neg_clause_idx].literals.size();
+                new_clause.literals.reserve(pos_lit_size+neg_lit_size);
+                bool is_tautology=false;
+                for(int k=0;k<pos_lit_size;k++){
+                    lit l=_clauses[pos_clause_idx].literals[k];
+                    if(l.prevar_idx!=bool_var_idx){new_clause.literals.push_back(l);}
+                }//add the lits in pos clause to new clause
+                for(int k=0;k<neg_lit_size;k++){
+                    lit l=_clauses[neg_clause_idx].literals[k];
+                    if(l.prevar_idx!=bool_var_idx){
+                        bool is_existed_lit=false;
+                        for(uint64_t i=0;i<pos_lit_size-1;i++){
+                            if(is_equal(l, new_clause.literals[i])){is_existed_lit=true;break;}// if the lit has existed, then it will not be added
+                            if(is_neg(l, new_clause.literals[i])){is_tautology=true;break;}//if there exists (aVb)^(-aV-b), the new clause is tautology
+                        }
+                        if(is_tautology){break;}
+                        if(!is_existed_lit){new_clause.literals.push_back(l);}
+                    }
+                }
+                if(!is_tautology){//add new clause, and modify the clause of corresponding bool var
+                    for(lit l:new_clause.literals){
+                        if(!l.is_idl_lit){
+                            _resolution_vars[l.prevar_idx].clause_idxs.push_back((int)_num_clauses);
+                        }
+                    }
+                    _clauses.push_back(new_clause);
+                    _num_clauses++;
+                }
+            }
+        }
+        for(int i=0;i<pos_clause_size;i++){
+            clause pos_cl=_clauses[pos_clauses[i]];
+            for(int j=0;j<pos_cl.literals.size();j++){
+                if(pos_cl.literals[j].prevar_idx==bool_var_idx){
+                    lit tmp=pos_cl.literals[j];
+                    pos_cl.literals[j]=pos_cl.literals[0];
+                    pos_cl.literals[0]=tmp;
+                    break;
+                }
+            }
+            _reconstruct_stack.push(pos_cl);
+        }
+        for(int i=0;i<neg_clause_size;i++){
+            clause neg_cl=_clauses[neg_clauses[i]];
+            for(int j=0;j<neg_cl.literals.size();j++){
+                if(neg_cl.literals[j].prevar_idx==bool_var_idx){
+                    lit tmp=neg_cl.literals[j];
+                    neg_cl.literals[j]=neg_cl.literals[0];
+                    neg_cl.literals[0]=tmp;
+                    break;
+                }
+            }
+            _reconstruct_stack.push(neg_cl);
+        }
+    }
+    }
+}
+void bool_ls_solver::up_bool_vars(){//reconstruct the solution by pop the stack
+    for(int i=0;i<_resolution_vars.size();i++){if(!_resolution_vars[i].is_idl&&_resolution_vars[i].up_bool==0){_resolution_vars[i].up_bool=-1;}}//set all origin bool var as false
+    while(!_reconstruct_stack.empty()){
+        clause cl=_reconstruct_stack.top();
+        _reconstruct_stack.pop();
+        bool sat_flag=false;
+        for(lit l:cl.literals){
+            if(l.is_idl_lit){
+                if(sym2var.find(l.prevar_idx)==sym2var.end()||sym2var.find(l.posvar_idx)==sym2var.end()){sat_flag=true;break;}
+                else if(_best_solution[sym2var[l.prevar_idx]]-_best_solution[sym2var[l.posvar_idx]]<=l.key){sat_flag=true;break;}
+            }
+            else{
+                if(sym2bool_var.find((int)l.prevar_idx)==sym2bool_var.end()){
+                    if((l.key>0&&_resolution_vars[l.prevar_idx].up_bool>0)||(l.key<0&&_resolution_vars[l.prevar_idx].up_bool<0)){sat_flag=true;break;}}
+                else if((_best_solution[sym2bool_var[(int)l.prevar_idx]]>0&&l.key>0)||(_best_solution[sym2bool_var[(int)l.prevar_idx]]<0&&l.key<0)){sat_flag=true;break;}
+            }
+        }
+        if(sat_flag==false){_resolution_vars[cl.literals[0].prevar_idx].up_bool=1;}//if the clause is false, flip the var
+    }
+}
+
+void bool_ls_solver::unit_prop(){
+    std::stack<uint64_t> unit_clause;//the var_idx in the unit clause
+    for(uint64_t clause_idx=0;clause_idx<_num_clauses;clause_idx++){//the unit clause is the undeleted clause containing only one bool var
+        if(!_clauses[clause_idx].is_delete&&_clauses[clause_idx].literals.size()==1&&!_clauses[clause_idx].literals[0].is_idl_lit){unit_clause.push(clause_idx);}
+    }
+    while(!unit_clause.empty()){
+        uint64_t unit_clause_idx=unit_clause.top();
+        unit_clause.pop();
+        if(_clauses[unit_clause_idx].is_delete){continue;}
+        int is_pos_lit=_clauses[unit_clause_idx].literals[0].key;
+        uint64_t unit_var=_clauses[unit_clause_idx].literals[0].prevar_idx;
+        _resolution_vars[unit_var].up_bool=is_pos_lit;//set the solution of a boolean var as its unit propogation value
+        _resolution_vars[unit_var].is_delete=true;
+        for(uint64_t cl_idx:_resolution_vars[unit_var].clause_idxs){
+            clause *cl=&(_clauses[cl_idx]);
+            if(cl->is_delete)continue;
+            for(uint64_t lit_idx=0;lit_idx<cl->literals.size();lit_idx++){
+                lit l=cl->literals[lit_idx];
+                if(!l.is_idl_lit&&l.prevar_idx==unit_var){
+                    if((is_pos_lit>0&&l.key>0)||(is_pos_lit<0&&l.key<0)){
+                        cl->is_delete=true;
+                        for(lit l:cl->literals){//delete the clause from corresponding bool var
+                            if(!l.is_idl_lit&&l.prevar_idx!=unit_var){
+                                for(uint64_t delete_idx=0;delete_idx<_resolution_vars[l.prevar_idx].clause_idxs.size();delete_idx++){
+                                    if(_resolution_vars[l.prevar_idx].clause_idxs[delete_idx]==cl_idx){
+                                        _resolution_vars[l.prevar_idx].clause_idxs[delete_idx]=_resolution_vars[l.prevar_idx].clause_idxs.back();
+                                        _resolution_vars[l.prevar_idx].clause_idxs.pop_back();
+                                        break;
+                                    }
+                                }
+                            }
+                        }
+                    }//if there exist same lit, the clause is already set true
+                    else{//else delete the lit
+                        cl->literals[lit_idx]=cl->literals.back();
+                        cl->literals.pop_back();
+                        if(cl->literals.size()==1&&!cl->literals[0].is_idl_lit){unit_clause.push(cl_idx);}//if after deleting, it becomes unit clause
+                    }
+                    break;
+                }
+            }
+        }
+    }
+}
+void bool_ls_solver::reduce_clause(){
+    sym2var.clear();
+    sym2bool_var.clear();
+    bool_var_vec.clear();
+    idl_var_vec.clear();
+    _vars.reserve(_resolution_vars.size());
+    int i,reduced_clause_num;
+    i=0;reduced_clause_num=0;
+    for(;i<_num_clauses;i++){if(!_clauses[i].is_delete){_clauses[reduced_clause_num++]=_clauses[i];}}
+    _clauses.resize(reduced_clause_num);
+    for(i=0;i<reduced_clause_num;i++){
+        _clauses[i].weight=1;
+        for(int k=0;k<_clauses[i].literals.size();k++){
+            lit *l=&(_clauses[i].literals[k]);
+            l->clause_idx=i;
+            if(l->is_idl_lit){
+                l->prevar_idx=transfer_to_reduced_var((int)l->prevar_idx);
+                l->posvar_idx=transfer_to_reduced_var((int)l->posvar_idx);
+                _vars[l->prevar_idx].literals.push_back(*l);
+                _vars[l->posvar_idx].literals.push_back(*l);
+                _clauses[i].idl_literals.push_back(*l);
+            }
+            else{
+                l->prevar_idx=transfer_to_reduced_bool_var((int)l->prevar_idx);
+                _vars[l->prevar_idx].literals.push_back(*l);
+                _clauses[i].bool_literals.push_back(*l);
+            }
+        }
+    }
+    _vars.resize(_vars.size());
+}
+uint64_t bool_ls_solver::transfer_to_reduced_var(int v_idx){
+    if(sym2var.find(v_idx)==sym2var.end()){
+        sym2var[v_idx]=_vars.size();
+        variable var;
+        var.is_idl=true;
+        var.var_name=_resolution_vars[v_idx].var_name;
+        _vars.push_back(var);
+        idl_var_vec.push_back(_vars.size()-1);
+        return _vars.size()-1;
+    }
+    else return sym2var[v_idx];
+}
+uint64_t bool_ls_solver::transfer_to_reduced_bool_var(int v_idx){
+    if(sym2bool_var.find(v_idx)==sym2bool_var.end()){
+        sym2bool_var[v_idx]=_vars.size();
+        variable var;
+        var.is_idl=false;
+        var.var_name=_resolution_vars[v_idx].var_name;
+        _vars.push_back(var);
+        bool_var_vec.push_back(_vars.size()-1);
+        return _vars.size()-1;
+    }
+    else return sym2bool_var[v_idx];
+}
+/**********lit equal or neg***********/
+bool bool_ls_solver::is_equal(lit &l1, lit &l2){
+    if(l1.is_idl_lit&&l2.is_idl_lit){return l1.prevar_idx==l2.prevar_idx&&l1.posvar_idx==l2.posvar_idx&&l2.posvar_idx&&l1.key==l2.key;}
+    else if(!l1.is_idl_lit&&!l2.is_idl_lit){return (l1.prevar_idx==l2.prevar_idx)&&((l1.key>0&&l2.key>0)||(l1.key<0&&l2.key<0));}
+    return false;
+}
+bool bool_ls_solver::is_neg(lit &l1, lit &l2){
+    if(l1.is_idl_lit&&l2.is_idl_lit){return l1.prevar_idx==l2.posvar_idx&&l1.posvar_idx==l2.prevar_idx&&(l1.key==(-1-l2.key));}
+    else if(!l1.is_idl_lit&&!l2.is_idl_lit){return (l1.prevar_idx==l2.prevar_idx)&&((l1.key>0&&l2.key<0)||(l1.key<0&&l2.key>0));}
+    return false;
+}
+
 
 void bool_ls_solver::clear_prev_data(){
     for(uint64_t v:bool_var_vec){_vars[v].score=0;}
@@ -257,7 +520,9 @@ void bool_ls_solver::initialize(){
 void bool_ls_solver::record_cdcl_lits(std::vector<int> & cdcl_lits){
     cdcl_lit_with_assigned_var->clear();
     cdcl_lit_unsolved->clear();
-    for(int l:cdcl_lits){cdcl_lit_unsolved->insert_element(l+(int)_num_lits);}//in order to make sure that elements inserted are non-negative
+    for(int l:cdcl_lits){
+        if(_lits[l].lits_index!=0){cdcl_lit_unsolved->insert_element(l+(int)_num_lits);}
+    }//in order to make sure that elements inserted are non-negative
 }
 
 void bool_ls_solver::construct_slution_score(){
@@ -971,7 +1236,7 @@ void bool_ls_solver::add_swap_operation(int &operation_idx){
     }
 }
 
-/**********random walk***********/
+/**********random walk************/
 void bool_ls_solver::random_walk_all(){
     uint64_t c;
     uint64_t best_operation_idx_idl,best_operation_idx_bool;
