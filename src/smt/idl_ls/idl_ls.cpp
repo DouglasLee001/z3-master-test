@@ -127,29 +127,29 @@ void bool_ls_solver::split_string(std::string &in_string, std::vector<std::strin
 void bool_ls_solver::build_lits(std::string & in_string){
     std::vector<std::string> vec;
     split_string(in_string, vec);
-    if(vec[3]=="0"){_lits[0].lits_index=0; return;}
-    int lit_index=std::atoi(vec[3].c_str());
-    if(vec[4][1]=='!'){_lits[lit_index].lits_index=0;return;}//lits index==0 means that the lit is true
+    if(vec[0]=="0"){_lits[0].lits_index=0; return;}
+    int lit_index=std::atoi(vec[0].c_str());
+    if(vec[1][1]=='!'){_lits[lit_index].lits_index=0;return;}//lits index==0 means that the lit is true
     uint64_t pos,pre;
     int k;
     lit l;
-    if(vec.size()>5){
-        if(vec.size()>9){
-            k=std::atoi(vec[15].c_str());
-            pos=transfer_name_to_var(vec[12],true);
-            pre=transfer_name_to_var(vec[8],true);
+    if(vec.size()>2){
+        if(vec.size()>6){
+            k=std::atoi(vec[12].c_str());
+            pos=transfer_name_to_var(vec[9],true);
+            pre=transfer_name_to_var(vec[5],true);
         }
         else{
-            k=std::atoi(vec[7].c_str());
+            k=std::atoi(vec[4].c_str());
             std::string ref_zero="__ref__zero__";
             pos=transfer_name_to_var(ref_zero, true);
             pre=transfer_name_to_var(vec[6], true);
         }
-        if(vec[5]==">="){std::swap(pre, pos);k=-k;}
+        if(vec[2]==">="){std::swap(pre, pos);k=-k;}
         l.prevar_idx=pre;l.posvar_idx=pos;l.key=k;l.is_idl_lit=true;
     }//idl lit
     else{
-        l.prevar_idx=transfer_name_to_var(vec[4], false);
+        l.prevar_idx=transfer_name_to_var(vec[1], false);
         l.key=1;
         l.is_idl_lit=false;
     }//boolean lit
@@ -187,8 +187,8 @@ bool bool_ls_solver::build_instance(std::vector<std::vector<int> >& clause_vec){
     resolution();
     unit_prop();
     reduce_clause();
-    // print_formula();
-    // std::cout<<"bool var num: "<<bool_var_vec.size()<<"\n";
+//    print_formula();
+//    std::cout<<"bool var num: "<<bool_var_vec.size()<<"\n";
     _num_clauses=_clauses.size();
     _num_vars=_vars.size();
     _num_bool_vars=bool_var_vec.size();

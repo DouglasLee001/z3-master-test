@@ -1419,6 +1419,8 @@ namespace smt {
 
         void display_expr_bool_var_map(std::ostream & out) const;
 
+        void expr_bool_var_map();
+
         void display_relevant_exprs(std::ostream & out) const;
 
         void display_theories(std::ostream & out) const;
