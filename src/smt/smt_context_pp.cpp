@@ -327,14 +327,19 @@ namespace smt {
                     clause_tmp.push_back(-l_curr.var());
                     for (unsigned j = 0; j < to_app(n)->get_num_args(); j++) {
                         expr *or_term=to_app(n)->get_arg(j);
+                        std::vector<int> clause_tmp_1;
+                        clause_tmp_1.push_back(l_curr.var());
                         if(to_app(or_term)->get_decl()->get_name()=="not"){
                             bool_var v1 = get_bool_var_of_id(to_app(or_term)->get_arg(0)->get_id());
                             clause_tmp.push_back(-v1);
+                            clause_tmp_1.push_back(v1);
                         }
                         else{
                             bool_var v1 = get_bool_var_of_id(or_term->get_id());
                             clause_tmp.push_back(v1);
+                            clause_tmp_1.push_back(-v1);
                         }
+                        clauses_vec.push_back(clause_tmp_1);
                     }
                     clauses_vec.push_back(clause_tmp);
                     ss << "or new_var"<<new_var_num++;

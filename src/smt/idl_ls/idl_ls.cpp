@@ -133,6 +133,14 @@ void bool_ls_solver::build_lits(std::string & in_string){
     uint64_t pos,pre;
     int k;
     lit l;
+    if(vec[1]=="or"){
+        l.prevar_idx=transfer_name_to_var(vec[2], false);
+        l.key=1;
+        l.is_idl_lit=false;
+        l.lits_index=lit_index;
+        _lits[lit_index]=l;
+        return;
+    }//or term in the form: 1 or newvar_2
     if(vec.size()>2){
         if(vec.size()>6){
             k=std::atoi(vec[12].c_str());
