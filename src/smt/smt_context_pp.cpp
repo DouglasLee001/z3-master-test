@@ -223,7 +223,7 @@ namespace smt {
         if (!m_assigned_literals.empty()) {
             out << "current assignment:\n";
             for (literal lit : m_assigned_literals) {
-                if(lit.sign())std::cout<<" - ";
+                if(lit.sign())std::cout<<"-";
                 std::cout<<lit.var()<<" ";
                 display_literal(out, lit);
                 if (!is_relevant(lit)) out << " n ";
@@ -231,6 +231,26 @@ namespace smt {
                 display_verbose(out, m, 1, &lit, m_bool_var2expr.c_ptr());
                 out << "\n";
             }
+        }
+    }
+
+    void context::record_assignment(){
+        if(!m_assigned_literals.empty()){
+#ifdef IDL_DEBUG
+            std::cout<<m_assigned_literals.size()<<"\n";
+            for (literal lit : m_assigned_literals) {
+                if(lit.sign())std::cout<<"-";
+                std::cout<<lit.var()<<" ";
+            }
+#endif
+            cdcl_lits.resize(m_assigned_literals.size());
+            int cdcl_lit_size=0;
+            for(literal lit:m_assigned_literals){
+                int cdcl_assignment=lit.var();
+                if(lit.sign()){cdcl_assignment=-cdcl_assignment;}
+                cdcl_lits[cdcl_lit_size++]=cdcl_assignment;
+            }
+            m_ls_solver->record_cdcl_lits(cdcl_lits);
         }
     }
 

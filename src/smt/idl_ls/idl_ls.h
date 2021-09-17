@@ -26,7 +26,7 @@ struct lit{
     int                         key;
     uint64_t                    clause_idx;
     bool                        is_idl_lit;
-    int                         lits_index;//store the index in _lits, 0 means the lit is true
+    int                         lits_index;//store the index in _lits, 0 means the lit is true or it has been deleted
 };
 
 struct variable{
@@ -142,6 +142,7 @@ public:
     void                        build_neighbor_clausenum();
     inline  int64_t             get_cost();
     void                        print_formula();
+    void                        print_literal(lit &l);
     uint64_t                    transfer_name_to_var(std::string & name,bool is_idl);
     uint64_t                    transfer_to_reduced_var(int v_idx);
     uint64_t                    transfer_to_reduced_bool_var(int v_idx);

@@ -169,6 +169,7 @@ namespace smt {
         u_map<bool_var>             m_expr2bool_var;
 #endif
         std::vector<std::vector<int> >            clauses_vec;//记录子句信息
+        std::vector<int>            cdcl_lits;//记录下传递给LS的文字集合
         ptr_vector<expr>            m_bool_var2expr;         // bool_var -> expr
         signed_char_vector          m_assignment;  //!< mapping literal id -> assignment lbool
         vector<watch_list>          m_watches;     //!< per literal
@@ -1412,6 +1413,8 @@ namespace smt {
         std::ostream& display_binary_clauses(std::ostream & out) const;
 
         void display_assignment(std::ostream & out) const;
+
+        void record_assignment();
 
         void display_eqc(std::ostream & out) const;
 
