@@ -221,7 +221,7 @@ namespace smt {
 
     void context::display_assignment(std::ostream & out) const {
         if (!m_assigned_literals.empty()) {
-            out << "current assignment:\n";
+            out << "current assignment: "<<m_assigned_literals.size()<<"\n";
             for (literal lit : m_assigned_literals) {
                 if(lit.sign())std::cout<<"-";
                 std::cout<<lit.var()<<" ";
@@ -242,6 +242,7 @@ namespace smt {
                 if(lit.sign())std::cout<<"-";
                 std::cout<<lit.var()<<" ";
             }
+            std::cout<<"\n";
 #endif
             cdcl_lits.resize(m_assigned_literals.size());
             int cdcl_lit_size=0;

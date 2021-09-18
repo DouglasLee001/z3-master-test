@@ -64,6 +64,8 @@ public:
     uint64_t                    _num_idl_vars;
     uint64_t                    _num_lits;
     uint64_t                    _num_clauses;
+    uint64_t                    _num_cdcl_bool_vars;
+    uint64_t                    _num_cdcl_idl_vars;
     uint64_t                    _max_lit_num_in_clause=0;
     uint64_t                    _additional_len;
     int                         _random_seed=1;

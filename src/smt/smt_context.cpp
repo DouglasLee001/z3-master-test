@@ -3657,8 +3657,8 @@ namespace smt {
                 for(auto l:cl){std::cout<<" "<<l;}
                 std::cout<<" )\n";
             }
-            display_assignment(std::cout);//在搜索开始之前先获取已经单元传播赋值的部分bool变量
             std::cout<<"after builid instance\n";
+            display_assignment(std::cout);//在搜索开始之前先获取已经单元传播赋值的部分bool变量
             std::cout<<"clause num:"<<m_ls_solver->_num_clauses<<"\n"<<"bool var num:"<<m_ls_solver->_num_bool_vars<<"\n";
             // m_ls_solver->print_formula();
 #endif
@@ -3962,7 +3962,9 @@ namespace smt {
         unsigned counter = 0;
 
         TRACE("bounded_search", tout << "starting bounded search...\n";);
-
+        static int resolution_cnt=1;
+        static int restart_cnt=0;
+        restart_cnt++;
         while (true) {
             while (!propagate()) {//当还不需要用decide操作，目前出现了冲突，并且尚未超出资源
                 TRACE_CODE({
@@ -4006,6 +4008,18 @@ namespace smt {
 
                 m_dyn_ack_manager.propagate_eh();//动态acker归结
                 CASSERT("dyn_ack", check_clauses(m_lemmas) && check_clauses(m_aux_clauses));
+                record_assignment();//在归结之后记录下CDCL传递过去的文字数目
+                double cdcl_bool_lit_percent=(double)m_ls_solver->_num_cdcl_bool_vars/(double)(m_ls_solver->_num_bool_vars);
+                double cdcl_idl_lit_percent=(double)m_ls_solver->_num_cdcl_idl_vars/(double)(m_ls_solver->_num_idl_vars);
+                double cdcl_percent=(double)(m_ls_solver->_num_cdcl_idl_vars+m_ls_solver->_num_cdcl_bool_vars)/(double)(m_ls_solver->_num_vars);
+                // std::cout<<std::setprecision(2)<<cdcl_bool_lit_percent<<"\n"<<cdcl_idl_lit_percent<<"\n"<<cdcl_percent<<"\n";
+#ifdef IDL_DEBUG
+                std::cout<<"\nresolution time: "<<resolution_cnt++<<"\nrestart time: "<<restart_cnt<<"\n";
+                display_assignment(std::cout);
+                std::cout<<"cdcl bool lit num: "<<m_ls_solver->_num_cdcl_bool_vars<<"\t cdcl idl lit num: "<<m_ls_solver->_num_cdcl_idl_vars<<"\n";
+                std::cout<<"bool lit num: "<<m_ls_solver->_num_bool_vars<<"\t\t idl lit num: "<<m_ls_solver->_num_idl_vars<<"\n";
+                std::cout<<"bool lit percent "<<std::setprecision(2)<<cdcl_bool_lit_percent<<"\nidl lit percent "<<cdcl_idl_lit_percent<<"\ncdcl percent "<<cdcl_percent<<"\n";
+#endif
             }
             //跳出传播的原因有2个：需要decide； 资源耗尽，需要返回unknown
             if (resource_limits_exceeded() && !inconsistent()) {

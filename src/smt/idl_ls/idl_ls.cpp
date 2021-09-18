@@ -539,10 +539,18 @@ void bool_ls_solver::initialize(){
 
 /**********restart construction***********/
 void bool_ls_solver::record_cdcl_lits(std::vector<int> & cdcl_lits){
+    _num_cdcl_idl_vars=0;
+    _num_cdcl_bool_vars=0;
     cdcl_lit_with_assigned_var->clear();
     cdcl_lit_unsolved->clear();
     for(int l:cdcl_lits){
-        if(_lits[std::abs(l)].lits_index!=0){cdcl_lit_unsolved->insert_element(l+(int)_num_lits);}
+        if(l>=(int)_num_lits||l<=-(int)_num_lits){continue;}//those outside the _lits are ignored
+        lit* l_curr=&(_lits[std::abs(l)]);
+        if(l_curr->lits_index!=0){
+            cdcl_lit_unsolved->insert_element(l+(int)_num_lits);
+            if(l_curr->is_idl_lit){_num_cdcl_idl_vars++;}
+            else{_num_cdcl_bool_vars++;}
+        }
     }//in order to make sure that elements inserted are non-negative
 }
 
@@ -551,7 +559,7 @@ void bool_ls_solver::construct_slution_score(){
     fill(construct_unsat.begin(), construct_unsat.end(), 0);
     unsat_clause_with_assigned_var->clear();
     std::vector<int> cdcl_bool_lits_assignment;
-    cdcl_bool_lits_assignment.reserve(cdcl_lit_unsolved->size());
+    cdcl_bool_lits_assignment.reserve(_num_cdcl_bool_vars+_additional_len);
     for(int i=0;i<cdcl_lit_unsolved->size();i++){
         int lit_idx=cdcl_lit_unsolved->element_at(i)-(int)_num_lits;//the cdcl lit assignment
         if(!_lits[std::abs(lit_idx)].is_idl_lit){cdcl_bool_lits_assignment.push_back(lit_idx);}//record those boolean cdcl lit assignment
