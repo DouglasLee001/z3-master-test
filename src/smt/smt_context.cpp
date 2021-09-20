@@ -3814,6 +3814,13 @@ namespace smt {
         m_num_conflicts_since_restart = 0;
     }
 
+        double bool_percent_big=0;
+        double bool_percent_avg=0;
+        double idl_percent_big=0;
+        double idl_percent_avg=0;
+        double all_percent_big=0;
+        double all_percent_avg=0;
+        int resolution_cnt=0;
     //搜索过程，调用核心部分bounded_search
     lbool context::search() {
         if (m_asserted_formulas.inconsistent()) {
@@ -3863,6 +3870,9 @@ namespace smt {
                 break;
             }            
         }
+#ifdef IDL_DEBUG
+        std::cout<<bool_percent_avg<<"\n"<<bool_percent_big<<"\n"<<idl_percent_avg<<"\n"<<idl_percent_big<<"\n"<<all_percent_avg<<"\n"<<all_percent_big<<"\n";
+#endif
 
         TRACE("guessed_literals",
               expr_ref_vector guessed_lits(m);
@@ -3962,7 +3972,6 @@ namespace smt {
         unsigned counter = 0;
 
         TRACE("bounded_search", tout << "starting bounded search...\n";);
-        static int resolution_cnt=1;
         static int restart_cnt=0;
         restart_cnt++;
         while (true) {
@@ -4009,16 +4018,23 @@ namespace smt {
                 m_dyn_ack_manager.propagate_eh();//动态acker归结
                 CASSERT("dyn_ack", check_clauses(m_lemmas) && check_clauses(m_aux_clauses));
                 record_assignment();//在归结之后记录下CDCL传递过去的文字数目
-                double cdcl_bool_lit_percent=(double)m_ls_solver->_num_cdcl_bool_vars/(double)(m_ls_solver->_num_bool_vars);
-                double cdcl_idl_lit_percent=(double)m_ls_solver->_num_cdcl_idl_vars/(double)(m_ls_solver->_num_idl_vars);
-                double cdcl_percent=(double)(m_ls_solver->_num_cdcl_idl_vars+m_ls_solver->_num_cdcl_bool_vars)/(double)(m_ls_solver->_num_vars);
-                // std::cout<<std::setprecision(2)<<cdcl_bool_lit_percent<<"\n"<<cdcl_idl_lit_percent<<"\n"<<cdcl_percent<<"\n";
+                double cdcl_bool_lit_percent=(double)m_ls_solver->_num_cdcl_bool_lits/(double)(m_ls_solver->_num_bool_lits);
+                double cdcl_idl_lit_percent=(double)m_ls_solver->_num_cdcl_idl_lits/(double)(m_ls_solver->_num_idl_lits);
+                double cdcl_percent=(double)(m_ls_solver->_num_cdcl_idl_lits+m_ls_solver->_num_cdcl_bool_lits)/(double)(m_ls_solver->_num_idl_lits+m_ls_solver->_num_bool_lits);
 #ifdef IDL_DEBUG
-                std::cout<<"\nresolution time: "<<resolution_cnt++<<"\nrestart time: "<<restart_cnt<<"\n";
-                display_assignment(std::cout);
-                std::cout<<"cdcl bool lit num: "<<m_ls_solver->_num_cdcl_bool_vars<<"\t cdcl idl lit num: "<<m_ls_solver->_num_cdcl_idl_vars<<"\n";
-                std::cout<<"bool lit num: "<<m_ls_solver->_num_bool_vars<<"\t\t idl lit num: "<<m_ls_solver->_num_idl_vars<<"\n";
-                std::cout<<"bool lit percent "<<std::setprecision(2)<<cdcl_bool_lit_percent<<"\nidl lit percent "<<cdcl_idl_lit_percent<<"\ncdcl percent "<<cdcl_percent<<"\n";
+                bool_percent_avg+=cdcl_bool_lit_percent;
+                idl_percent_avg+=cdcl_idl_lit_percent;
+                all_percent_avg+=cdcl_percent;
+                if(cdcl_bool_lit_percent>bool_percent_big)bool_percent_big=cdcl_bool_lit_percent;
+                if(cdcl_idl_lit_percent>idl_percent_big)idl_percent_big=cdcl_idl_lit_percent;
+                if(cdcl_percent>all_percent_big)all_percent_big=cdcl_percent;
+                // std::cout<<"bool percent\n"<<cdcl_bool_lit_percent<<"\nidl percent\n"<<cdcl_idl_lit_percent<<"\nall percent\n"<<cdcl_percent<<"\n";
+                // std::cout<<"\nresolution time: "<<resolution_cnt<<"\nrestart time: "<<restart_cnt<<"\n";
+                resolution_cnt++;
+                // display_assignment(std::cout);
+                // std::cout<<"cdcl bool lit num: "<<m_ls_solver->_num_cdcl_bool_lits<<"\t cdcl idl lit num: "<<m_ls_solver->_num_cdcl_idl_lits<<"\n";
+                // std::cout<<"bool lit num: "<<m_ls_solver->_num_bool_lits<<"\t\t idl lit num: "<<m_ls_solver->_num_idl_lits<<"\n";
+                // std::cout<<"bool lit percent "<<std::setprecision(2)<<cdcl_bool_lit_percent<<"\nidl lit percent "<<cdcl_idl_lit_percent<<"\ncdcl percent "<<cdcl_percent<<"\n";
 #endif
             }
             //跳出传播的原因有2个：需要decide； 资源耗尽，需要返回unknown

@@ -151,7 +151,7 @@ void bool_ls_solver::build_lits(std::string & in_string){
             k=std::atoi(vec[4].c_str());
             std::string ref_zero="__ref__zero__";
             pos=transfer_name_to_var(ref_zero, true);
-            pre=transfer_name_to_var(vec[6], true);
+            pre=transfer_name_to_var(vec[3], true);
         }
         if(vec[2]==">="){std::swap(pre, pos);k=-k;}
         l.prevar_idx=pre;l.posvar_idx=pos;l.key=k;l.is_idl_lit=true;
@@ -429,16 +429,21 @@ void bool_ls_solver::reduce_clause(){
         }
     }
     _vars.resize(_vars.size());
+    _num_idl_lits=0;_num_bool_lits=0;
     for(lit &l:_lits){
         if(l.is_idl_lit){
             if(sym2var.find(l.prevar_idx)!=sym2var.end()&&sym2var.find(l.posvar_idx)!=sym2var.end()){
                 l.prevar_idx=sym2var[(int)l.prevar_idx];
                 l.posvar_idx=sym2var[(int)l.posvar_idx];
+                _num_idl_lits++;
             }
             else{l.lits_index=0;}
         }
         else{
-            if(sym2bool_var.find((int)l.prevar_idx)!=sym2bool_var.end()){l.prevar_idx=sym2bool_var[(int)l.prevar_idx];}
+            if(sym2bool_var.find((int)l.prevar_idx)!=sym2bool_var.end()){
+                l.prevar_idx=sym2bool_var[(int)l.prevar_idx];
+                _num_bool_lits++;
+            }
             else{l.lits_index=0;}
         }
     }//map term in lits to _vars, the lits_index of those lits with vars deleted are set as 0, indicating that they are deleted
@@ -539,8 +544,8 @@ void bool_ls_solver::initialize(){
 
 /**********restart construction***********/
 void bool_ls_solver::record_cdcl_lits(std::vector<int> & cdcl_lits){
-    _num_cdcl_idl_vars=0;
-    _num_cdcl_bool_vars=0;
+    _num_cdcl_idl_lits=0;
+    _num_cdcl_bool_lits=0;
     cdcl_lit_with_assigned_var->clear();
     cdcl_lit_unsolved->clear();
     for(int l:cdcl_lits){
@@ -548,8 +553,8 @@ void bool_ls_solver::record_cdcl_lits(std::vector<int> & cdcl_lits){
         lit* l_curr=&(_lits[std::abs(l)]);
         if(l_curr->lits_index!=0){
             cdcl_lit_unsolved->insert_element(l+(int)_num_lits);
-            if(l_curr->is_idl_lit){_num_cdcl_idl_vars++;}
-            else{_num_cdcl_bool_vars++;}
+            if(l_curr->is_idl_lit){_num_cdcl_idl_lits++;}
+            else{_num_cdcl_bool_lits++;}
         }
     }//in order to make sure that elements inserted are non-negative
 }
@@ -559,7 +564,7 @@ void bool_ls_solver::construct_slution_score(){
     fill(construct_unsat.begin(), construct_unsat.end(), 0);
     unsat_clause_with_assigned_var->clear();
     std::vector<int> cdcl_bool_lits_assignment;
-    cdcl_bool_lits_assignment.reserve(_num_cdcl_bool_vars+_additional_len);
+    cdcl_bool_lits_assignment.reserve(_num_cdcl_bool_lits+_additional_len);
     for(int i=0;i<cdcl_lit_unsolved->size();i++){
         int lit_idx=cdcl_lit_unsolved->element_at(i)-(int)_num_lits;//the cdcl lit assignment
         if(!_lits[std::abs(lit_idx)].is_idl_lit){cdcl_bool_lits_assignment.push_back(lit_idx);}//record those boolean cdcl lit assignment
