@@ -3650,16 +3650,16 @@ namespace smt {
             expr_bool_var_map();
             m_ls_solver->build_instance(clauses_vec);
 #ifdef IDL_DEBUG
-            display_expr_bool_var_map(std::cout);//在搜索开始之前打印bool变量和表达式的对应关系,在此处将布尔抽象后的文字与文字编号对应起来，即调用了build_lits
+            // display_expr_bool_var_map(std::cout);//在搜索开始之前打印bool变量和表达式的对应关系,在此处将布尔抽象后的文字与文字编号对应起来，即调用了build_lits
             std::cout<<"0\n"<<clauses_vec.size()<<"\n";
             for(auto cl:clauses_vec){
                 std::cout<<"(";
                 for(auto l:cl){std::cout<<" "<<l;}
                 std::cout<<" )\n";
             }
-            std::cout<<"after builid instance\n";
-            display_assignment(std::cout);//在搜索开始之前先获取已经单元传播赋值的部分bool变量
-            std::cout<<"clause num:"<<m_ls_solver->_num_clauses<<"\n"<<"bool var num:"<<m_ls_solver->_num_bool_vars<<"\n";
+            // std::cout<<"after builid instance\n";
+            // display_assignment(std::cout);//在搜索开始之前先获取已经单元传播赋值的部分bool变量
+            // std::cout<<"clause num:"<<m_ls_solver->_num_clauses<<"\n"<<"bool var num:"<<m_ls_solver->_num_bool_vars<<"\n";
             // m_ls_solver->print_formula();
 #endif
             record_assignment();
@@ -3821,6 +3821,8 @@ namespace smt {
         double all_percent_big=0;
         double all_percent_avg=0;
         int resolution_cnt=0;
+        int enter_ls_cnt=0;
+        int restart_time=1;
     //搜索过程，调用核心部分bounded_search
     lbool context::search() {
         if (m_asserted_formulas.inconsistent()) {
@@ -3845,7 +3847,6 @@ namespace smt {
         TRACE("search_lite", tout << "searching...\n";);
         lbool    status            = l_undef;
         unsigned curr_lvl          = m_scope_lvl;
-        int restart_time=1;
         bool ls_flag=false;
         while (true) {
             SASSERT(!inconsistent());
@@ -3865,6 +3866,7 @@ namespace smt {
                 std::cout<<"end local search  "<<m_timer.get_seconds()<<"\n";
 #endif
             }
+            restart_time++;
             // std::cout<<"restart_time "<<restart_time++<<"  time: "<<m_timer.get_seconds()<<"\n";
             if (!restart(status, curr_lvl)) {//如果受限搜索结束了就调用重启
                 break;
@@ -3873,7 +3875,7 @@ namespace smt {
 #ifdef IDL_DEBUG
         std::cout<<bool_percent_avg<<"\n"<<bool_percent_big<<"\n"<<idl_percent_avg<<"\n"<<idl_percent_big<<"\n"<<all_percent_avg<<"\n"<<all_percent_big<<"\n";
 #endif
-
+        std::cout<<enter_ls_cnt<<"\n"<<restart_time<<"\n";
         TRACE("guessed_literals",
               expr_ref_vector guessed_lits(m);
               get_guessed_literals(guessed_lits);
@@ -4021,6 +4023,13 @@ namespace smt {
                 double cdcl_bool_lit_percent=(double)m_ls_solver->_num_cdcl_bool_lits/(double)(m_ls_solver->_num_bool_lits);
                 double cdcl_idl_lit_percent=(double)m_ls_solver->_num_cdcl_idl_lits/(double)(m_ls_solver->_num_idl_lits);
                 double cdcl_percent=(double)(m_ls_solver->_num_cdcl_idl_lits+m_ls_solver->_num_cdcl_bool_lits)/(double)(m_ls_solver->_num_idl_lits+m_ls_solver->_num_bool_lits);
+                if(cdcl_bool_lit_percent>0.7){
+                    enter_ls_cnt++;
+                    std::cout<<"enter LS "<<enter_ls_cnt<<" time: "<<m_timer.get_seconds()<<"\n";
+                    m_ls_solver->local_search();
+                    if(m_ls_solver->_best_found_hard_cost==0){std::cout<<"local search sat\n"<<m_timer.get_seconds()<<"\n";return l_true;}
+                    std::cout<<"finish LS time: "<<m_timer.get_seconds()<<"\n";
+                }
 #ifdef IDL_DEBUG
                 bool_percent_avg+=cdcl_bool_lit_percent;
                 idl_percent_avg+=cdcl_idl_lit_percent;

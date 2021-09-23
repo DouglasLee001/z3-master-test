@@ -331,13 +331,13 @@ namespace smt {
     void context::expr_bool_var_map(){
         std::string myString;
         if (!m_b_internalized_stack.empty()) {
-            unsigned sz = m_b_internalized_stack.size();
-#ifdef IDL_DEBUG
+            uint64_t sz = m_b_internalized_stack.size();
+#ifdef NIDL_DEBUG
         std::cout<<sz<<"\n";
 #endif
             m_ls_solver->make_lits_space(sz);//构造lits的空间
             int new_var_num=0;
-            for (unsigned i = 0; i < sz; i++) {
+            for (uint64_t i = 0; i < sz; i++) {
                 expr *  n  = m_b_internalized_stack.get(i);
                 bool_var v = get_bool_var_of_id(n->get_id());
                 literal l_curr=get_literal(n);
