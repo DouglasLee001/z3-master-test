@@ -447,6 +447,13 @@ void bool_ls_solver::reduce_clause(){
             else{l.lits_index=0;}
         }
     }//map term in lits to _vars, the lits_index of those lits with vars deleted are set as 0, indicating that they are deleted
+    uint64_t max_lit_num=0;
+    for(auto var_idx:idl_var_vec){
+        if(_vars[var_idx].literals.size()>max_lit_num){
+            idl_var_idx_with_most_lits=var_idx;
+            max_lit_num=_vars[var_idx].literals.size();
+        }
+    }
 }
 uint64_t bool_ls_solver::transfer_to_reduced_var(int v_idx){
     if(sym2var.find(v_idx)==sym2var.end()){
@@ -1111,11 +1118,11 @@ int64_t bool_ls_solver::pick_critical_move(int64_t &direction){
         clause *cl=&(_clauses[c]);
         for(lit l:cl->idl_literals){
             int delta=lit_delta(l);
-           if(_step>tabulist[2*l.posvar_idx]&&CClist[2*l.posvar_idx]>0){
+           if(_step>tabulist[2*l.posvar_idx]&&CClist[2*l.posvar_idx]>0&&l.posvar_idx!=idl_var_idx_with_most_lits){
 //           if((_step>tabulist[2*l.posvar_idx]&&CCmode==-1)||(CClist[2*l.posvar_idx]>0&&CCmode>=0)){
                operation_vec[operation_idx++]=(delta)*(int)_num_vars+(int)l.posvar_idx;
            }
-            if(_step>tabulist[2*l.prevar_idx+1]&&CClist[2*l.prevar_idx+1]>0){
+            if(_step>tabulist[2*l.prevar_idx+1]&&CClist[2*l.prevar_idx+1]>0&&l.prevar_idx!=idl_var_idx_with_most_lits){
 //           if((_step>tabulist[2*l.prevar_idx+1]&&CCmode==-1)||(CClist[2*l.prevar_idx+1]>0&&CCmode>=0)){
                operation_vec[operation_idx++]=(-delta)*(int)_num_vars+(int)l.prevar_idx;
            }
@@ -1274,7 +1281,9 @@ void bool_ls_solver::add_swap_operation(int &operation_idx){
     for(lit l:cl->idl_literals){
         if(l.prevar_idx!=cl->watch_lit.prevar_idx||l.posvar_idx!=cl->watch_lit.posvar_idx||l.key!=cl->watch_lit.key){
             int delta=lit_delta(l);
+            if(l.posvar_idx!=idl_var_idx_with_most_lits)
             operation_vec[operation_idx++]=(delta)*(int)_num_vars+(int)l.posvar_idx;
+            if(l.prevar_idx!=idl_var_idx_with_most_lits)
             operation_vec[operation_idx++]=(-delta)*(int)_num_vars+(int)l.prevar_idx;
         }
     }

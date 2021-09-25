@@ -92,6 +92,7 @@ public:
     int                         CCmode=-1;//-1 means tabu; 0 means allowing the neighbor in clause; 1 means allowing the neighbor in lit (especially for idl); 2 means allowing opposite direction of neighbor in lit
     bool                        is_validation=false;
     uint64_t                    softclause_weight_threshold;
+    uint64_t                    idl_var_idx_with_most_lits;//fix the idl var with most lits
 
     //data structure
     std::vector<clause>         _clauses;
