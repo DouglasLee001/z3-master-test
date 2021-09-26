@@ -3972,6 +3972,11 @@ namespace smt {
     //受限搜索，这是搜索部分的核心代码!!!
     lbool context::bounded_search() {
         unsigned counter = 0;
+        static double last_enter_ls_time=0;//上次进入LS的时间
+        static int conflict_num_since_last_ls=0;//自从上次进入LS后遇到的冲突数量
+        static int last_ls_restart_cnt=0;//上次进入LS时的重启次数
+        static bool is_first_ls=true;//是否第一次进入LS
+        static double ls_time_gap=0;//进入LS的时间间隔
 
         TRACE("bounded_search", tout << "starting bounded search...\n";);
         static int restart_cnt=0;
@@ -3987,6 +3992,7 @@ namespace smt {
                 });
                 //此处在做归结操作，学习子句，回溯
                 tick(counter);//将counter加一，如果超过上限就重置counter，并且打印搜索信息
+                conflict_num_since_last_ls++;//自从上次进入LS的冲突数加一
 
                 if (!resolve_conflict())//归结冲突返回false说明当前的公式不可满足
                     return l_false;
@@ -4019,17 +4025,27 @@ namespace smt {
 
                 m_dyn_ack_manager.propagate_eh();//动态acker归结
                 CASSERT("dyn_ack", check_clauses(m_lemmas) && check_clauses(m_aux_clauses));
-                record_assignment();//在归结之后记录下CDCL传递过去的文字数目
-                double cdcl_bool_lit_percent=(double)m_ls_solver->_num_cdcl_bool_lits/(double)(m_ls_solver->_num_bool_lits);
-                double cdcl_idl_lit_percent=(double)m_ls_solver->_num_cdcl_idl_lits/(double)(m_ls_solver->_num_idl_lits);
-                double cdcl_percent=(double)(m_ls_solver->_num_cdcl_idl_lits+m_ls_solver->_num_cdcl_bool_lits)/(double)(m_ls_solver->_num_idl_lits+m_ls_solver->_num_bool_lits);
-                if(cdcl_bool_lit_percent>0.7){
-                    enter_ls_cnt++;
-                    std::cout<<"enter LS "<<enter_ls_cnt<<" time: "<<m_timer.get_seconds()<<"\n";
-                    m_ls_solver->local_search();
-                    if(m_ls_solver->_best_found_hard_cost==0){std::cout<<"local search sat\n"<<m_timer.get_seconds()<<"\n";return l_true;}
-                    std::cout<<"finish LS time: "<<m_timer.get_seconds()<<"\n";
-                }
+                if(is_first_ls||!is_first_ls&&(m_timer.get_seconds()-last_enter_ls_time)>ls_time_gap){
+                    record_assignment();//在归结之后记录下CDCL传递过去的文字数目
+                    double cdcl_bool_lit_percent=(double)m_ls_solver->_num_cdcl_bool_lits/(double)(m_ls_solver->_num_bool_lits);
+                    double cdcl_idl_lit_percent=(double)m_ls_solver->_num_cdcl_idl_lits/(double)(m_ls_solver->_num_idl_lits);
+                    double cdcl_percent=(double)(m_ls_solver->_num_cdcl_idl_lits+m_ls_solver->_num_cdcl_bool_lits)/(double)(m_ls_solver->_num_idl_lits+m_ls_solver->_num_bool_lits);
+                    if(cdcl_bool_lit_percent>0.7){
+                        enter_ls_cnt++;
+                        last_enter_ls_time=m_timer.get_seconds();//记录下上次进入LS的时间
+                        conflict_num_since_last_ls=0;//将自从上次进入LS的冲突数量归零
+                        last_ls_restart_cnt=restart_time;//记录下上次进入LS的重启数
+                        std::cout<<"enter LS "<<enter_ls_cnt<<" time: "<<m_timer.get_seconds()<<"\n";
+                        m_ls_solver->local_search();
+                        if(m_ls_solver->_best_found_hard_cost==0){std::cout<<"local search sat\n"<<m_timer.get_seconds()<<"\n";return l_true;}
+                        std::cout<<"finish LS time: "<<m_timer.get_seconds()<<"\n";
+                        if(is_first_ls){
+                            is_first_ls=false;
+                            ls_time_gap=6*(m_timer.get_seconds()-last_enter_ls_time);
+                            if(ls_time_gap>100){ls_time_gap=100;}
+                            std::cout<<"time gap: "<<ls_time_gap<<"\n";    
+                        }//确定ls_gap
+                    }
 #ifdef IDL_DEBUG
                 bool_percent_avg+=cdcl_bool_lit_percent;
                 idl_percent_avg+=cdcl_idl_lit_percent;
@@ -4038,13 +4054,14 @@ namespace smt {
                 if(cdcl_idl_lit_percent>idl_percent_big)idl_percent_big=cdcl_idl_lit_percent;
                 if(cdcl_percent>all_percent_big)all_percent_big=cdcl_percent;
                 // std::cout<<"bool percent\n"<<cdcl_bool_lit_percent<<"\nidl percent\n"<<cdcl_idl_lit_percent<<"\nall percent\n"<<cdcl_percent<<"\n";
-                // std::cout<<"\nresolution time: "<<resolution_cnt<<"\nrestart time: "<<restart_cnt<<"\n";
                 resolution_cnt++;
                 // display_assignment(std::cout);
                 // std::cout<<"cdcl bool lit num: "<<m_ls_solver->_num_cdcl_bool_lits<<"\t cdcl idl lit num: "<<m_ls_solver->_num_cdcl_idl_lits<<"\n";
                 // std::cout<<"bool lit num: "<<m_ls_solver->_num_bool_lits<<"\t\t idl lit num: "<<m_ls_solver->_num_idl_lits<<"\n";
                 // std::cout<<"bool lit percent "<<std::setprecision(2)<<cdcl_bool_lit_percent<<"\nidl lit percent "<<cdcl_idl_lit_percent<<"\ncdcl percent "<<cdcl_percent<<"\n";
 #endif
+                }
+                
             }
             //跳出传播的原因有2个：需要decide； 资源耗尽，需要返回unknown
             if (resource_limits_exceeded() && !inconsistent()) {
