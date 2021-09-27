@@ -3823,8 +3823,6 @@ namespace smt {
         int resolution_cnt=0;
         int enter_ls_cnt=0;
         int restart_time=1;
-        bool is_first_restart=true;//是否是第一次进入重启
-        double one_round_time;
         double total_ls_time=0;
     //搜索过程，调用核心部分bounded_search
     lbool context::search() {
@@ -3853,13 +3851,8 @@ namespace smt {
         bool ls_flag=false;
         while (true) {
             SASSERT(!inconsistent());
-            if(is_first_restart){one_round_time=m_timer.get_seconds();}//记录下第一次进入搜索的时间
+
             status = bounded_search();//受限搜索
-            if(is_first_restart){
-                is_first_restart=false;
-                one_round_time=m_timer.get_seconds()-one_round_time;
-                std::cout<<"one round time: "<<one_round_time<<"\n";
-            }
             TRACE("search_bug", tout << "status: " << status << ", inconsistent: " << inconsistent() << "\n";);
             TRACE("assigned_literals_per_lvl", display_num_assigned_literals_per_lvl(tout);
                   tout << ", num_assigned: " << m_assigned_literals.size() << "\n";);
@@ -3974,7 +3967,6 @@ namespace smt {
         static int last_ls_restart_cnt=0;//上次进入LS时的重启次数
         static bool is_first_ls=true;//是否第一次进入LS
         static double ls_time_gap=0;//进入LS的时间间隔
-        static int restart_gap=1;//进入LS的重启数间隔
 
         TRACE("bounded_search", tout << "starting bounded search...\n";);
         static int restart_cnt=0;
@@ -4023,8 +4015,7 @@ namespace smt {
 
                 m_dyn_ack_manager.propagate_eh();//动态acker归结
                 CASSERT("dyn_ack", check_clauses(m_lemmas) && check_clauses(m_aux_clauses));
-                // if(!is_first_restart&&use_ls&&(is_first_ls||!is_first_ls&&(m_timer.get_seconds()-last_enter_ls_time)>ls_time_gap)){
-                if(!is_first_restart && use_ls&& (is_first_ls || (!is_first_ls && ((restart_time-last_ls_restart_cnt)>restart_gap) && ((m_timer.get_seconds()-last_enter_ls_time)>ls_time_gap) ) )){
+                if(use_ls&&((m_timer.get_seconds()-last_enter_ls_time)>ls_time_gap)){
                     record_assignment();//在归结之后记录下CDCL传递过去的文字数目
                     double cdcl_bool_lit_percent=(double)m_ls_solver->_num_cdcl_bool_lits/(double)(m_ls_solver->_num_bool_lits);
                     double cdcl_idl_lit_percent=(double)m_ls_solver->_num_cdcl_idl_lits/(double)(m_ls_solver->_num_idl_lits);
@@ -4039,14 +4030,8 @@ namespace smt {
                         if(m_ls_solver->_best_found_hard_cost==0){std::cout<<"local search sat\n"<<m_timer.get_seconds()<<"\n";return l_true;}
                         std::cout<<"finish LS time: "<<m_timer.get_seconds()<<"\n";
                         total_ls_time+=(m_timer.get_seconds()-last_enter_ls_time);
-                        if(is_first_ls){
-                            is_first_ls=false;
-                            ls_time_gap=6*(m_timer.get_seconds()-last_enter_ls_time);
-                            restart_gap=(ls_time_gap/one_round_time)/2;
-                            if(restart_gap<1){restart_gap=1;}
-                            std::cout<<"time gap: "<<ls_time_gap<<"\n";    
-                            std::cout<<"restart gap: "<<restart_gap<<"\n"; 
-                        }//确定ls_gap
+                        ls_time_gap=6*(m_timer.get_seconds()-last_enter_ls_time);
+                        std::cout<<"time gap: "<<ls_time_gap<<"\n";//确定ls_gap
                     }
 #ifdef IDL_DEBUG
                 bool_percent_avg+=cdcl_bool_lit_percent;
