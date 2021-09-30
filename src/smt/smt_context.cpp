@@ -3651,6 +3651,9 @@ namespace smt {
             if(use_ls){
                 expr_bool_var_map();
                 m_ls_solver->build_instance(clauses_vec);
+                m_ls_solver->local_search();
+                std::cout<<"local search best:\n"<<m_ls_solver->_best_found_hard_cost<<"\n";
+                if(m_ls_solver->_best_found_hard_cost==0){std::cout<<"local search sat\n"<<m_timer.get_seconds()<<"\n";return l_true;}
             }        
 #ifdef IDL_DEBUG
             // display_expr_bool_var_map(std::cout);//在搜索开始之前打印bool变量和表达式的对应关系,在此处将布尔抽象后的文字与文字编号对应起来，即调用了build_lits
@@ -4020,19 +4023,19 @@ namespace smt {
                     double cdcl_bool_lit_percent=(double)m_ls_solver->_num_cdcl_bool_lits/(double)(m_ls_solver->_num_bool_lits);
                     double cdcl_idl_lit_percent=(double)m_ls_solver->_num_cdcl_idl_lits/(double)(m_ls_solver->_num_idl_lits);
                     double cdcl_percent=(double)(m_ls_solver->_num_cdcl_idl_lits+m_ls_solver->_num_cdcl_bool_lits)/(double)(m_ls_solver->_num_idl_lits+m_ls_solver->_num_bool_lits);
-                    if(cdcl_bool_lit_percent>0.7){
-                        enter_ls_cnt++;
-                        last_enter_ls_time=m_timer.get_seconds();//记录下上次进入LS的时间
-                        conflict_num_since_last_ls=0;//将自从上次进入LS的冲突数量归零
-                        last_ls_restart_cnt=restart_time;//记录下上次进入LS的重启数
-                        std::cout<<"enter LS "<<enter_ls_cnt<<" time: "<<m_timer.get_seconds()<<"\n";
-                        m_ls_solver->local_search();
-                        if(m_ls_solver->_best_found_hard_cost==0){std::cout<<"local search sat\n"<<m_timer.get_seconds()<<"\n";return l_true;}
-                        std::cout<<"finish LS time: "<<m_timer.get_seconds()<<"\n";
-                        total_ls_time+=(m_timer.get_seconds()-last_enter_ls_time);
-                        ls_time_gap=6*(m_timer.get_seconds()-last_enter_ls_time);
-                        std::cout<<"time gap: "<<ls_time_gap<<"\n";//确定ls_gap
-                    }
+                    // if(cdcl_bool_lit_percent>0.7){
+                    //     enter_ls_cnt++;
+                    //     last_enter_ls_time=m_timer.get_seconds();//记录下上次进入LS的时间
+                    //     conflict_num_since_last_ls=0;//将自从上次进入LS的冲突数量归零
+                    //     last_ls_restart_cnt=restart_time;//记录下上次进入LS的重启数
+                    //     std::cout<<"enter LS "<<enter_ls_cnt<<" time: "<<m_timer.get_seconds()<<"\n";
+                    //     m_ls_solver->local_search();
+                    //     if(m_ls_solver->_best_found_hard_cost==0){std::cout<<"local search sat\n"<<m_timer.get_seconds()<<"\n";return l_true;}
+                    //     std::cout<<"finish LS time: "<<m_timer.get_seconds()<<"\n";
+                    //     total_ls_time+=(m_timer.get_seconds()-last_enter_ls_time);
+                    //     ls_time_gap=6*(m_timer.get_seconds()-last_enter_ls_time);
+                    //     std::cout<<"time gap: "<<ls_time_gap<<"\n";//确定ls_gap
+                    // }
 #ifdef IDL_DEBUG
                 bool_percent_avg+=cdcl_bool_lit_percent;
                 idl_percent_avg+=cdcl_idl_lit_percent;

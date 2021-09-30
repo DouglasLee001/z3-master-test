@@ -6,7 +6,7 @@ bool_ls_solver::bool_ls_solver(){
     softclause_weight_threshold=1;
     _additional_len=10;
     _max_tries=1;
-    _max_step=100000;
+    _max_step=UINT64_MAX;
     _swt_p=0.7;
     _swt_threshold=50;
     smooth_probability=3;
@@ -1053,10 +1053,12 @@ void bool_ls_solver::critical_move(uint64_t var_idx,uint64_t direction){
         _solution[var_idx]+=change_value;
     }
     else{
+        // if(_step>100000){std::cout<<"enter bool opt: "<<_step<<" current unsat clause: "<<_unsat_hard_clauses.size();}
         int origin_score=_vars[var_idx].score;
         critical_score_subscore(var_idx, 0);
         _solution[var_idx]*=-1;
         _vars[var_idx].score=-origin_score;
+        // if(_step>100000){std::cout<<"\n after unsat clause: "<<_unsat_hard_clauses.size()<<"  flip var: "<<var_idx<<"\n\n";}
     }
     //step
     if(_vars[var_idx].is_idl){
@@ -1068,6 +1070,7 @@ void bool_ls_solver::critical_move(uint64_t var_idx,uint64_t direction){
         last_move[2*var_idx]=_step;
         tabulist[var_idx*2]=_step+3+mt()%10;
         if(CCmode!=-1){modifyCC(var_idx, direction);}
+        bool_tabu_tenue=_step+100+mt()%5;
     }
 }
 
@@ -1109,7 +1112,7 @@ int64_t bool_ls_solver::pick_critical_move(int64_t &direction){
     int best_value=0;
     int best_safety=INT32_MIN;
     bool BMS=false;
-    best_score=0;
+    best_score=1;
     best_var_idx=-1;
     uint64_t best_last_move=UINT64_MAX;
     int        operation_idx=0;
@@ -1341,7 +1344,7 @@ void bool_ls_solver::random_walk_all(){
             best_operation_idx_bool=i;
         }
     }
-    if(operation_idx_bool==0||(operation_idx_idl>0&&operation_idx_bool>0&&mt()%_num_vars<_num_idl_vars)){
+    if(operation_idx_bool==0||(_step<bool_tabu_tenue)||(operation_idx_idl>0&&operation_idx_bool>0&&mt()%_lit_in_unsast_clause_num>_bool_lit_in_unsat_clause_num)){//进入随机步也根据假子句中的布尔文字比例,以及是否被禁来，如果(没有布尔操作) 或者 （布尔操作当前仍然被禁） 或者 (按假子句中IDL文字的比例比例作为概率选中) 则做IDL操作
         hash_opt(operation_vec_idl[best_operation_idx_idl], var_idx, operation_direction, critical_value);
         if(critical_value>0){_forward_critical_value[var_idx]=critical_value;}
         else{_backward_critical_value[var_idx]=-critical_value;}
@@ -1556,15 +1559,15 @@ bool bool_ls_solver::local_search(){
     initialize();
     for(_step=1;_step<_max_step;_step++){
         if(0==_unsat_hard_clauses.size()){return true;}
-        // if(_step%1000==0&&(TimeElapsed()>_cutoff)){break;}
-        if(no_improve_cnt>50000){initialize();no_improve_cnt=0;}
+        if(_step%1000==0&&(TimeElapsed()>_cutoff)){break;}
+        if(no_improve_cnt>500000){initialize();no_improve_cnt=0;}
         if(mt()%100<99||sat_num_one_clauses->size()==0){//only when 1% probabilty and |sat_num_one_clauses| is more than 1, do the swap from small weight
 //        if(mt()%100<99){
-            if(mt()%_lit_in_unsast_clause_num<_bool_lit_in_unsat_clause_num){flipv=pick_critical_move_bool(direction);}
+            if(_step>bool_tabu_tenue&&mt()%_lit_in_unsast_clause_num<_bool_lit_in_unsat_clause_num){flipv=pick_critical_move_bool(direction);}
             else{flipv=pick_critical_move(direction);}
         if(flipv!=-1) {critical_move(flipv, direction);}
         }
-        else{swap_from_small_weight_clause();}
+//        else{swap_from_small_weight_clause();}
         if(update_best_solution()) no_improve_cnt=0;
         else                        no_improve_cnt++;
     }
