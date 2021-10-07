@@ -52,6 +52,8 @@ void bool_ls_solver::make_space(){
     cdcl_lit_with_assigned_var=new Array(2*(int)_num_lits+(int)_additional_len);
     cdcl_lit_unsolved=new Array(2*(int)_num_lits+(int)_additional_len);
     is_chosen_bool_var.resize(_num_vars+_additional_len,false);
+    pure_bool_unsat_clauses=new Array((int)_num_clauses+(int)_additional_len);
+    contain_bool_unsat_clauses=new Array((int)_num_clauses+(int)_additional_len);
 }
 /// build neighbor_var_idxs for each var
 void bool_ls_solver::build_neighbor_clausenum(){
@@ -415,6 +417,7 @@ void bool_ls_solver::reduce_clause(){
             lit *l=&(_clauses[i].literals[k]);
             l->clause_idx=i;
             if(l->is_idl_lit){
+                _clauses[i].is_pure_boolean=false;//当出现了一个整数文字，意味着该子句不是纯bool
                 l->prevar_idx=transfer_to_reduced_var((int)l->prevar_idx);
                 l->posvar_idx=transfer_to_reduced_var((int)l->posvar_idx);
                 _vars[l->prevar_idx].literals.push_back(*l);
@@ -756,6 +759,8 @@ void bool_ls_solver::unsat_a_clause(uint64_t the_clause){
         _index_in_unsat_soft_clauses[the_clause]=_unsat_soft_clauses.size();
         _unsat_soft_clauses.push_back(the_clause);
     }
+    if(_clauses[the_clause].is_pure_boolean){pure_bool_unsat_clauses->insert_element((int)the_clause);}//如果该子句是纯布尔子句，则将其加入纯bool假子句
+    if(_clauses[the_clause].bool_literals.size()>0){contain_bool_unsat_clauses->insert_element((int)the_clause);}
 }
 
 void bool_ls_solver::sat_a_clause(uint64_t the_clause){
@@ -781,6 +786,8 @@ void bool_ls_solver::sat_a_clause(uint64_t the_clause){
             _index_in_unsat_soft_clauses[last_item] = index;
             }
         }
+    pure_bool_unsat_clauses->delete_element((int)the_clause);//将该子句从纯bool假子句中删除
+    contain_bool_unsat_clauses->delete_element((int)the_clause);//将该子句从包含bool假子句中删除
 }
 
 /**********calculate the delta of a lit***********/
@@ -1053,12 +1060,12 @@ void bool_ls_solver::critical_move(uint64_t var_idx,uint64_t direction){
         _solution[var_idx]+=change_value;
     }
     else{
-        // if(_step>100000){std::cout<<"enter bool opt: "<<_step<<" current unsat clause: "<<_unsat_hard_clauses.size();}
+//        if(_step>100000){std::cout<<"enter bool opt: "<<_step<<" current unsat clause: "<<_unsat_hard_clauses.size();}
         int origin_score=_vars[var_idx].score;
         critical_score_subscore(var_idx, 0);
         _solution[var_idx]*=-1;
         _vars[var_idx].score=-origin_score;
-        // if(_step>100000){std::cout<<"\n after unsat clause: "<<_unsat_hard_clauses.size()<<"  flip var: "<<var_idx<<"\n\n";}
+//        if(_step>100000){std::cout<<"\n after unsat clause: "<<_unsat_hard_clauses.size()<<"  flip var: "<<var_idx<<"\n\n";}
     }
     //step
     if(_vars[var_idx].is_idl){
@@ -1067,10 +1074,11 @@ void bool_ls_solver::critical_move(uint64_t var_idx,uint64_t direction){
         if(CCmode!=-1){modifyCC(var_idx,direction);}
     }
     else{
-        last_move[2*var_idx]=_step;
-        tabulist[var_idx*2]=_step+3+mt()%10;
+        last_move[2*var_idx]=_outer_layer_step;
+        tabulist[var_idx*2]=_outer_layer_step+3+mt()%10;
         if(CCmode!=-1){modifyCC(var_idx, direction);}
         bool_tabu_tenue=_step+100+mt()%5;
+        _outer_layer_step++;//每次外层搜索都要flip一个布尔变量，外层步数加一
     }
 }
 
@@ -1192,33 +1200,29 @@ int64_t bool_ls_solver::pick_critical_move(int64_t &direction){
     random_walk_all();
     return best_var_idx;
 }
-int64_t bool_ls_solver::pick_critical_move_bool(int64_t & direction){
+//从所有假子句中选择一个未禁的分数最高的布尔变量，如果不存在就随机布尔步
+//当进入外层搜索时，要首先flip“第一个”布尔变量（前提是存在带bool变量的假子句），这是为了让内层骨架与之前有所不同，遍历所有带bool变量的假子句（如果首次进入，这些子句应该全是混合子句，因为首次进入时没有纯布尔假子句），该布尔变量应该是希望能
+//尽量多地满足子句，任何子句（混合子句）,选择最大分数的（不需要大于0，因为外层搜索属于疏散操作），如果不存在（所有操作都被禁忌了），则进入随机步
+//随机步时：随机选一个假（带bool变量的）子句，从中选一个最老的布尔变量flip
+int64_t bool_ls_solver::pick_move_bool_first(){
     int best_score,score,best_var_idx,cnt,operation;
-    int best_value=0;
-    int best_safety=INT32_MIN;
+    int best_value=INT32_MIN;
     bool BMS=false;
     best_score=1;
     best_var_idx=-1;
     uint64_t best_last_move=UINT64_MAX;
     int        operation_idx=0;
-//    int        operation_idx_out_cc=0;
-    for(uint64_t c:_unsat_hard_clauses){
-        clause *cl=&(_clauses[c]);
+    for(int i=0;i<contain_bool_unsat_clauses->size();i++){
+        clause *cl=&(_clauses[contain_bool_unsat_clauses->element_at(i)]);
         for(lit l:cl->bool_literals){
             if(is_chosen_bool_var[l.prevar_idx])continue;
-            if(_step>tabulist[2*l.prevar_idx]&&CClist[2*l.prevar_idx]>0) {
-//            if((_step>tabulist[2*l.prevar_idx]&&CCmode==-1)||(CClist[2*l.prevar_idx]>0&&CCmode>=0)) {
+            if(_outer_layer_step>tabulist[2*l.prevar_idx]&&CClist[2*l.prevar_idx]>0) {
                 operation_vec[operation_idx++]=(int)l.prevar_idx;
                 is_chosen_bool_var[l.prevar_idx]=true;
             }
-//            else{
-//                operation_vec_bool[operation_idx_out_cc++]=(int)l.prevar_idx;
-//                is_chosen_bool_var[l.prevar_idx]=true;
-//            }
         }
     }
     for(int i=0;i<operation_idx;i++){is_chosen_bool_var[operation_vec[i]]=false;}// recover chosen_bool_var
-//    for(int i=0;i<operation_idx_out_cc;i++){is_chosen_bool_var[operation_vec_bool[i]]=false;}
     if(operation_idx>45){BMS=true;cnt=45;}
     else{BMS=false;cnt=operation_idx;}
     for(int i=0;i<cnt;i++){
@@ -1229,15 +1233,84 @@ int64_t bool_ls_solver::pick_critical_move_bool(int64_t & direction){
             operation_vec[idx]=tmp;
         }
         else{operation=operation_vec[i];}
-//        operation=operation_vec[i];
-        int var_idx,operation_direction,critical_value,safety;
+        int var_idx,operation_direction,critical_value;
         hash_opt(operation, var_idx, operation_direction, critical_value);
-//            score=critical_score(var_idx, critical_value,safety);
         score=_vars[var_idx].score;
-        safety=0;
         uint64_t last_move_step=last_move[2*var_idx];
-        if(score>best_score||(score==best_score&&safety>best_safety)||(score==best_score&&safety==best_safety&&last_move_step<best_last_move)){
-                best_safety=safety;
+        if(score>best_score||(score==best_score&&last_move_step<best_last_move)){
+                best_score=score;
+                best_var_idx=var_idx;
+                best_last_move=last_move_step;
+                best_value=critical_value;
+            }
+    }
+    //if there is untabu move
+    if(best_var_idx!=-1){return best_var_idx;}
+    //else return the oldest one in a random clause containing bool vars
+    best_last_move=UINT64_MAX;
+    int random_idx=mt()%contain_bool_unsat_clauses->size();
+    clause *cl=&(_clauses[contain_bool_unsat_clauses->element_at(random_idx)]);
+    for(lit l:cl->bool_literals){
+        uint64_t last_move_step=last_move[2*l.prevar_idx];
+        if(last_move_step<best_last_move){
+            best_last_move=last_move_step;
+            best_var_idx=(int)l.prevar_idx;
+        }
+    }
+    return best_var_idx;
+}
+//计算翻转该变量可以让pure bool clauses的权重变化量
+int bool_ls_solver::outer_layer_score(uint64_t var_idx){
+    int outer_score=0;
+    for(lit &l:_vars[var_idx].literals){
+        clause *cl=&(_clauses[l.clause_idx]);
+        if(cl->is_pure_boolean){
+            if(cl->sat_count==0){outer_score+=cl->weight;}
+            else if(cl->sat_count==1&&cl->watch_lit.prevar_idx==var_idx){outer_score-=cl->weight;}
+        }
+    }
+    return outer_score;
+}
+//当flip完第一个bool变量之后，导致出现了未满足的纯布尔子句，为了使其满足，就要继续flip布尔变量，此时希望可以
+//首先尽量多地满足纯布尔子句（外层分数），其次原score可以作为副分数，遍历所有纯布尔假子句，找到外层分数最大且大于0的未禁忌变量，如果不存在，就先对纯布尔假子句加权然后进入外层随机步
+//随机步时：随机选一个纯布尔假子句中，从中选择一个最老布尔变量flip
+int64_t bool_ls_solver::pick_move_bool_outer_layer(){
+    int best_score,score,best_outer_score,outer_score,best_var_idx,cnt,operation;
+    int best_value=0;
+    bool BMS=false;
+    best_score=INT32_MIN;
+    best_outer_score=1;
+    best_var_idx=-1;
+    uint64_t best_last_move=UINT64_MAX;
+    int        operation_idx=0;
+    for(int i=0;i<pure_bool_unsat_clauses->size();i++){
+        clause *cl=&(_clauses[pure_bool_unsat_clauses->element_at(i)]);
+        for(lit l:cl->bool_literals){
+            if(is_chosen_bool_var[l.prevar_idx])continue;
+            if(_outer_layer_step>tabulist[2*l.prevar_idx]&&CClist[2*l.prevar_idx]>0) {
+                operation_vec[operation_idx++]=(int)l.prevar_idx;
+                is_chosen_bool_var[l.prevar_idx]=true;
+            }
+        }
+    }
+    for(int i=0;i<operation_idx;i++){is_chosen_bool_var[operation_vec[i]]=false;}// recover chosen_bool_var
+    if(operation_idx>45){BMS=true;cnt=45;}
+    else{BMS=false;cnt=operation_idx;}
+    for(int i=0;i<cnt;i++){
+        if(BMS){
+            int idx=mt()%(operation_idx-i);
+            int tmp=operation_vec[operation_idx-i-1];
+            operation=operation_vec[idx];
+            operation_vec[idx]=tmp;
+        }
+        else{operation=operation_vec[i];}
+        int var_idx,operation_direction,critical_value;
+        hash_opt(operation, var_idx, operation_direction, critical_value);
+        outer_score=outer_layer_score(var_idx);
+        score=_vars[var_idx].score;
+        uint64_t last_move_step=last_move[2*var_idx];
+        if(outer_score>best_outer_score||(outer_score==best_outer_score&&score>best_score)||(outer_score==best_outer_score&&score==best_score&&last_move_step<best_last_move)){
+                best_outer_score=outer_score;
                 best_score=score;
                 best_var_idx=var_idx;
                 best_last_move=last_move_step;
@@ -1246,34 +1319,23 @@ int64_t bool_ls_solver::pick_critical_move_bool(int64_t & direction){
     }
     //if there is untabu decreasing move
     if(best_var_idx!=-1){return best_var_idx;}
-//    //choose one from the out_cc
-//    best_score=(int)total_clause_weight/_num_clauses;
-//    if(operation_idx_out_cc>45){BMS=true;cnt=45;}
-//    else{BMS=false;cnt=operation_idx_out_cc;}
-//    for(int i=0;i<cnt;i++){
-//        if(BMS){
-//            int idx=mt()%(operation_idx_out_cc-i);
-//            int tmp=operation_vec_bool[operation_idx_out_cc-i-1];
-//            operation=operation_vec_bool[idx];
-//            operation_vec_bool[idx]=tmp;
-//        }
-//        else{operation=operation_vec_bool[i];}
-//        int var_idx,operation_direction,critical_value,safety;
-//        hash_opt(operation, var_idx, operation_direction, critical_value);
-//            score=critical_score(var_idx, critical_value,safety);
-//        uint64_t last_move_step=last_move[2*var_idx];
-//        if(score>best_score||(score==best_score&&safety>best_safety)||(score==best_score&&safety==best_safety&&last_move_step<best_last_move)){
-//            best_safety=safety;
-//            best_score=score;
-//            best_var_idx=var_idx;
-//            best_last_move=last_move_step;
-//        }
-//    }
-//    if(best_var_idx!=-1){return  best_var_idx;}
-    //update weight
-    if(mt()%10000>smooth_probability){update_clause_weight_critical();}
-    else {smooth_clause_weight_critical();}
-    random_walk_all();
+    //update weight of pure bool unsat clauses, and random walk by picking the oldest var in a random pure bool clause
+    for(int i=0;i<pure_bool_unsat_clauses->size();i++){
+        clause *cl=&(_clauses[pure_bool_unsat_clauses->element_at(i)]);
+        cl->weight+=h_inc;
+        for(lit &l:cl->bool_literals){_vars[l.prevar_idx].score+=h_inc;}
+    }
+    total_clause_weight+=h_inc*pure_bool_unsat_clauses->size();
+    best_last_move=UINT64_MAX;
+    int random_idx=mt()%pure_bool_unsat_clauses->size();
+    clause *cl=&(_clauses[pure_bool_unsat_clauses->element_at(random_idx)]);
+    for(lit l:cl->bool_literals){
+        uint64_t last_move_step=last_move[2*l.prevar_idx];
+        if(last_move_step<best_last_move){
+            best_last_move=last_move_step;
+            best_var_idx=(int)l.prevar_idx;
+        }
+    }
     return best_var_idx;
 }
 
@@ -1293,14 +1355,15 @@ void bool_ls_solver::add_swap_operation(int &operation_idx){
 }
 
 /**********random walk************/
+//only random walk on those integer vars，在此时已经没有纯布尔假子句了，因此遍历3个假子句必然存在idl操作
+//随机选3个子句，最多5个整数操作，从中选择副分数最大的
 void bool_ls_solver::random_walk_all(){
     uint64_t c;
-    uint64_t best_operation_idx_idl,best_operation_idx_bool;
+    uint64_t best_operation_idx_idl;
     //best is the best operation of all, second is the best of non-last-true
-    best_operation_idx_idl=best_operation_idx_bool=0;
+    best_operation_idx_idl=0;
     uint64_t        operation_idx_idl=0;
-    uint64_t        operation_idx_bool=0;
-    for(int i=0;i<3&&operation_idx_idl+operation_idx_bool<5;i++){
+    for(int i=0;i<3&&operation_idx_idl<5;i++){
         c=_unsat_hard_clauses[mt()%_unsat_hard_clauses.size()];
         clause *cp=&(_clauses[c]);
         for(lit l:cp->idl_literals){
@@ -1308,19 +1371,10 @@ void bool_ls_solver::random_walk_all(){
             operation_vec_idl[operation_idx_idl++]=(-delta)*(int)_num_vars+(int)l.prevar_idx;
             operation_vec_idl[operation_idx_idl++]=(delta)*(int)_num_vars+(int)l.posvar_idx;
         }
-        for(lit l:cp->bool_literals){
-            if(is_chosen_bool_var[l.prevar_idx]){continue;}
-            operation_vec_bool[operation_idx_bool++]=(int)l.prevar_idx;
-            is_chosen_bool_var[l.prevar_idx]=true;
-        }
     }
-    for(int i=0;i<operation_idx_bool;i++){is_chosen_bool_var[operation_vec_bool[i]]=false;}
-    int subscore,score,var_idx,operation_direction,critical_value,safety_bool;
+    int subscore,var_idx,operation_direction,critical_value;
     int best_subscore_idl=INT32_MAX;
-    int best_score_bool=INT32_MIN;
-    int best_safety_bool=INT32_MIN;
     uint64_t best_last_move_idl=UINT64_MAX;
-    uint64_t best_last_move_bool=UINT64_MAX;
     for(uint64_t i=0;i<operation_idx_idl;i++){
         hash_opt(operation_vec_idl[i], var_idx, operation_direction, critical_value);
         subscore=critical_subscore(var_idx, critical_value);
@@ -1331,27 +1385,9 @@ void bool_ls_solver::random_walk_all(){
             best_operation_idx_idl=i;
         }
     }
-    for(uint64_t i=0;i<operation_idx_bool;i++){
-        hash_opt(operation_vec_idl[i], var_idx, operation_direction, critical_value);
-//        score=critical_score(var_idx, critical_value, safety_bool);
-        score=_vars[var_idx].score;
-        safety_bool=0;
-        uint64_t last_move_step=last_move[2*var_idx];
-        if(score>best_score_bool||(score==best_score_bool&&safety_bool>best_safety_bool)||(score==best_score_bool&&safety_bool==best_safety_bool&&last_move_step<best_last_move_bool)){
-            best_score_bool=score;
-            best_safety_bool=safety_bool;
-            best_last_move_bool=last_move_step;
-            best_operation_idx_bool=i;
-        }
-    }
-    if(operation_idx_bool==0||(_step<bool_tabu_tenue)||(operation_idx_idl>0&&operation_idx_bool>0&&mt()%_lit_in_unsast_clause_num>_bool_lit_in_unsat_clause_num)){//进入随机步也根据假子句中的布尔文字比例,以及是否被禁来，如果(没有布尔操作) 或者 （布尔操作当前仍然被禁） 或者 (按假子句中IDL文字的比例比例作为概率选中) 则做IDL操作
         hash_opt(operation_vec_idl[best_operation_idx_idl], var_idx, operation_direction, critical_value);
         if(critical_value>0){_forward_critical_value[var_idx]=critical_value;}
         else{_backward_critical_value[var_idx]=-critical_value;}
-    }
-    else{
-        hash_opt(operation_vec_bool[best_operation_idx_bool], var_idx, operation_direction, critical_value);
-    }
     critical_move(var_idx, operation_direction);
 }
 /**********update solution***********/
@@ -1396,23 +1432,6 @@ void bool_ls_solver::hash_opt(int operation,int &var_idx,int &operation_directio
 }
 
 /**********clause weighting***********/
-void bool_ls_solver::update_clause_weight(){
-    clause *cp;
-    for(uint64_t c:_unsat_soft_clauses){
-        cp=&(_clauses[c]);
-        if(cp->weight>softclause_weight_threshold)
-            continue;
-        cp->weight++;
-    }
-    for(uint64_t c:_unsat_hard_clauses){
-        cp=&(_clauses[c]);
-        cp->weight+=h_inc;
-    }
-    total_clause_weight+=_unsat_soft_clauses.size();
-    total_clause_weight+=h_inc*_unsat_hard_clauses.size();
-    if(total_clause_weight>_swt_threshold*_num_clauses)
-        smooth_clause_weight();
-}
 
 //only add clause weight
 void bool_ls_solver::update_clause_weight_critical(){
@@ -1551,23 +1570,37 @@ bool bool_ls_solver::check_best_solution(){
     return unsat_hard_num==_best_found_hard_cost;
 }
 /************local search****************/
+void bool_ls_solver::outer_layer_search(){
+    int64_t flipv;
+    // first pick a bool var to flip, in order to modify the "skeleton" of integer formula
+    //首先翻转一个bool变量，为了让当前整数公式的骨架变得不同，属于疏散操作，注意此时不存在纯布尔子句，该变量会首先从带bool变量的假子句中选择，遍历这些子句，从中找出未被禁忌的分数最大的变量（不用大于0），如果没有就进入随机步，从随机一个带bool的子句中选一个最老的布尔变量
+    flipv=pick_move_bool_first();
+    if(flipv!=-1){critical_move(flipv,0);}
+    //empty the pure bool unsat clauses
+    //不断从纯布尔子句中选择（分数>0的）分数最大的未禁忌变量，如果没有就进入随机步，从随机一个纯bool子句中选择一个最老的布尔变量
+    while(pure_bool_unsat_clauses->size()!=0){
+        flipv=pick_move_bool_outer_layer();
+        if(flipv!=-1) {critical_move(flipv,0);}
+    }
+}
+
 bool bool_ls_solver::local_search(){
     int64_t flipv;
     int64_t direction;//0 means moving forward while 1 means moving backward
     uint64_t no_improve_cnt=0;
     start = std::chrono::steady_clock::now();
     initialize();
+    _outer_layer_step=1;
     for(_step=1;_step<_max_step;_step++){
         if(0==_unsat_hard_clauses.size()){return true;}
         if(_step%1000==0&&(TimeElapsed()>_cutoff)){break;}
         if(no_improve_cnt>500000){initialize();no_improve_cnt=0;}
-        if(mt()%100<99||sat_num_one_clauses->size()==0){//only when 1% probabilty and |sat_num_one_clauses| is more than 1, do the swap from small weight
-//        if(mt()%100<99){
-            if(_step>bool_tabu_tenue&&mt()%_lit_in_unsast_clause_num<_bool_lit_in_unsat_clause_num){flipv=pick_critical_move_bool(direction);}
-            else{flipv=pick_critical_move(direction);}
-        if(flipv!=-1) {critical_move(flipv, direction);}
+        if(_step>bool_tabu_tenue&&contain_bool_unsat_clauses->size()>0){outer_layer_search();}
+        //当在禁忌中，或者所有假子句都是纯整数的，则不能进入外层（因为如果假子句中没有布尔，则翻转布尔变量不能使其变真,只会让问题变得更难，相当于加约束）
+        else{
+            flipv=pick_critical_move(direction);
+            if(flipv!=-1) {critical_move(flipv, direction);}
         }
-//        else{swap_from_small_weight_clause();}
         if(update_best_solution()) no_improve_cnt=0;
         else                        no_improve_cnt++;
     }
