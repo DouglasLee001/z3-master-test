@@ -12,7 +12,7 @@ bool_ls_solver::bool_ls_solver(){
     smooth_probability=3;
     _random_seed=1;
     mt.seed(_random_seed);
-    _cutoff=1200;
+    _cutoff=600;
     CCmode=-1;
 }
 
@@ -1586,10 +1586,10 @@ void bool_ls_solver::outer_layer_search(){
     if(flipv!=-1){critical_move(flipv,0);}
     //empty the pure bool unsat clauses
     //不断从纯布尔子句中选择（分数>0的）分数最大的未禁忌变量，如果没有就进入随机步，从随机一个纯bool子句中选择一个最老的布尔变量
-    while(pure_bool_unsat_clauses->size()!=0){
-        flipv=pick_move_bool_outer_layer();
-        if(flipv!=-1) {critical_move(flipv,0);}
-    }
+//    while(pure_bool_unsat_clauses->size()!=0){
+//        flipv=pick_move_bool_outer_layer();
+//        if(flipv!=-1) {critical_move(flipv,0);}
+//    }
     _best_found_hard_cost_this_inner=_unsat_hard_clauses.size();
 }
 
@@ -1605,7 +1605,8 @@ bool bool_ls_solver::local_search(){
         if(0==_unsat_hard_clauses.size()){return true;}
         if(_step%1000==0&&(TimeElapsed()>_cutoff)){break;}
         if(no_improve_cnt>500000){initialize();no_improve_cnt=0;}
-        if(no_improve_cnt_inner>1000&&_step>bool_tabu_tenue&&contain_bool_unsat_clauses->size()>0){
+//        if(no_improve_cnt_inner>1000&&_step>bool_tabu_tenue&&contain_bool_unsat_clauses->size()>0){
+        if(mt()%_lit_in_unsast_clause_num<_bool_lit_in_unsat_clause_num){
             outer_layer_search();
             no_improve_cnt_inner=0;
         }
