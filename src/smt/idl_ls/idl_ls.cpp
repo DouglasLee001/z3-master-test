@@ -12,7 +12,7 @@ bool_ls_solver::bool_ls_solver(){
     smooth_probability=3;
     _random_seed=1;
     mt.seed(_random_seed);
-    _cutoff=600;
+    _cutoff=1200;
     CCmode=-1;
 }
 
@@ -1411,6 +1411,14 @@ bool bool_ls_solver::update_best_solution(){
     return improve;
 }
 
+bool bool_ls_solver::update_inner_best_solution(){
+    if(_unsat_hard_clauses.size()<_best_found_hard_cost_this_inner){
+        _best_found_hard_cost_this_inner=_unsat_hard_clauses.size();
+        return true;
+    }
+    return false;
+}
+
 double bool_ls_solver::TimeElapsed(){
     std::chrono::steady_clock::time_point finish = std::chrono::steady_clock::now();
     std::chrono::duration<double> duration = finish - start;
@@ -1582,12 +1590,14 @@ void bool_ls_solver::outer_layer_search(){
         flipv=pick_move_bool_outer_layer();
         if(flipv!=-1) {critical_move(flipv,0);}
     }
+    _best_found_hard_cost_this_inner=_unsat_hard_clauses.size();
 }
 
 bool bool_ls_solver::local_search(){
     int64_t flipv;
     int64_t direction;//0 means moving forward while 1 means moving backward
     uint64_t no_improve_cnt=0;
+    uint64_t no_improve_cnt_inner=UINT64_MAX;//确保进来第一次先进入外层搜索
     start = std::chrono::steady_clock::now();
     initialize();
     _outer_layer_step=1;
@@ -1595,7 +1605,10 @@ bool bool_ls_solver::local_search(){
         if(0==_unsat_hard_clauses.size()){return true;}
         if(_step%1000==0&&(TimeElapsed()>_cutoff)){break;}
         if(no_improve_cnt>500000){initialize();no_improve_cnt=0;}
-        if(_step>bool_tabu_tenue&&contain_bool_unsat_clauses->size()>0){outer_layer_search();}
+        if(no_improve_cnt_inner>1000&&_step>bool_tabu_tenue&&contain_bool_unsat_clauses->size()>0){
+            outer_layer_search();
+            no_improve_cnt_inner=0;
+        }
         //当在禁忌中，或者所有假子句都是纯整数的，则不能进入外层（因为如果假子句中没有布尔，则翻转布尔变量不能使其变真,只会让问题变得更难，相当于加约束）
         else{
             flipv=pick_critical_move(direction);
@@ -1603,6 +1616,8 @@ bool bool_ls_solver::local_search(){
         }
         if(update_best_solution()) no_improve_cnt=0;
         else                        no_improve_cnt++;
+        if(update_inner_best_solution()) no_improve_cnt_inner=0;
+        else                        no_improve_cnt_inner++;
     }
     return false;
 }

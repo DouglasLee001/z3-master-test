@@ -123,6 +123,7 @@ public:
     uint64_t                    _best_found_hard_cost;
     uint64_t                    _best_found_hard_cost_this_restart;
     uint64_t                    _best_found_soft_cost;
+    uint64_t                    _best_found_hard_cost_this_inner;
     double                      _best_cost_time;
     uint64_t                    _step;
     uint64_t                    _outer_layer_step;
@@ -201,6 +202,7 @@ public:
     inline void                  sat_a_clause(uint64_t the_clause);
     inline void                  unsat_a_clause(uint64_t the_clause);
     bool                         update_best_solution();
+    bool                         update_inner_best_solution();
     void                         hash_opt(int operation,int &var_idx,int &operation_direction,int &critical_value);
     void                         modifyCC(uint64_t var_idx,uint64_t direction);
     //calculate the score and subscore of a critical operation
