@@ -12,7 +12,21 @@ bool_ls_solver::bool_ls_solver(){
     smooth_probability=3;
     _random_seed=1;
     mt.seed(_random_seed);
-    _cutoff=1200;
+    _cutoff=600;
+    CCmode=-1;
+}
+bool_ls_solver::bool_ls_solver(int random_seed){
+    h_inc=1;
+    softclause_weight_threshold=1;
+    _additional_len=10;
+    _max_tries=1;
+    _max_step=UINT64_MAX;
+    _swt_p=0.7;
+    _swt_threshold=50;
+    smooth_probability=3;
+    _random_seed=random_seed;
+    mt.seed(_random_seed);
+    _cutoff=600;
     CCmode=-1;
 }
 

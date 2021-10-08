@@ -97,7 +97,7 @@ namespace smt {
         m_last_search_result(l_undef),
         m_last_search_failure(UNKNOWN),
         m_searching(false) {
-        m_ls_solver=new boolidl::bool_ls_solver();
+        m_ls_solver=new boolidl::bool_ls_solver((int)m_fparams.m_random_seed);
         SASSERT(m_scope_lvl == 0);
         SASSERT(m_base_lvl == 0);
         SASSERT(m_search_lvl == 0);

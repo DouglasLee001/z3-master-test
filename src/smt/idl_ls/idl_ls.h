@@ -139,6 +139,7 @@ public:
     std::chrono::steady_clock::time_point start;//time
 
     bool_ls_solver();
+    bool_ls_solver(int random_seed);
     bool                        parse_arguments(const int argc, char ** const argv);
     void                        split_string(std::string &in_string, std::vector<std::string> &str_vec,std::string pattern);
     void                        build_lits(std::string &in_string);
