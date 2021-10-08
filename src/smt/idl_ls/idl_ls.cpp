@@ -12,7 +12,7 @@ bool_ls_solver::bool_ls_solver(){
     smooth_probability=3;
     _random_seed=1;
     mt.seed(_random_seed);
-    _cutoff=600;
+    _cutoff=1200;
     CCmode=-1;
 }
 
@@ -54,6 +54,7 @@ void bool_ls_solver::make_space(){
     is_chosen_bool_var.resize(_num_vars+_additional_len,false);
     pure_bool_unsat_clauses=new Array((int)_num_clauses+(int)_additional_len);
     contain_bool_unsat_clauses=new Array((int)_num_clauses+(int)_additional_len);
+    contain_idl_unsat_clauses=new Array((int)_num_clauses+(int)_additional_len);
 }
 /// build neighbor_var_idxs for each var
 void bool_ls_solver::build_neighbor_clausenum(){
@@ -761,6 +762,7 @@ void bool_ls_solver::unsat_a_clause(uint64_t the_clause){
     }
     if(_clauses[the_clause].is_pure_boolean){pure_bool_unsat_clauses->insert_element((int)the_clause);}//如果该子句是纯布尔子句，则将其加入纯bool假子句
     if(_clauses[the_clause].bool_literals.size()>0){contain_bool_unsat_clauses->insert_element((int)the_clause);}
+    if(_clauses[the_clause].idl_literals.size()>0){contain_idl_unsat_clauses->insert_element((int)the_clause);}
 }
 
 void bool_ls_solver::sat_a_clause(uint64_t the_clause){
@@ -788,6 +790,7 @@ void bool_ls_solver::sat_a_clause(uint64_t the_clause){
         }
     pure_bool_unsat_clauses->delete_element((int)the_clause);//将该子句从纯bool假子句中删除
     contain_bool_unsat_clauses->delete_element((int)the_clause);//将该子句从包含bool假子句中删除
+    contain_idl_unsat_clauses->delete_element((int)the_clause);//将该子句从包含idl假子句中删除
 }
 
 /**********calculate the delta of a lit***********/
@@ -1125,8 +1128,8 @@ int64_t bool_ls_solver::pick_critical_move(int64_t &direction){
     uint64_t best_last_move=UINT64_MAX;
     int        operation_idx=0;
     //determine the critical value
-    for(uint64_t c:_unsat_hard_clauses){
-        clause *cl=&(_clauses[c]);
+    for(int i=0;i<contain_idl_unsat_clauses->size();i++){
+        clause *cl=&(_clauses[contain_idl_unsat_clauses->element_at(i)]);
         for(lit l:cl->idl_literals){
             int delta=lit_delta(l);
            if(_step>tabulist[2*l.posvar_idx]&&CClist[2*l.posvar_idx]>0&&l.posvar_idx!=idl_var_idx_with_most_lits){
@@ -1364,7 +1367,8 @@ void bool_ls_solver::random_walk_all(){
     best_operation_idx_idl=0;
     uint64_t        operation_idx_idl=0;
     for(int i=0;i<3&&operation_idx_idl<5;i++){
-        c=_unsat_hard_clauses[mt()%_unsat_hard_clauses.size()];
+        int random_idx=mt()%contain_idl_unsat_clauses->size();
+        c=contain_idl_unsat_clauses->element_at(random_idx);
         clause *cp=&(_clauses[c]);
         for(lit l:cp->idl_literals){
             int delta=lit_delta(l);
