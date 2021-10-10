@@ -50,7 +50,6 @@ struct clause{
     uint64_t                    sat_count;
     uint64_t                    weight;
     bool                        is_hard=true;
-    bool                        is_pure_boolean=true;
     lit                         watch_lit;//the lit with smallest delta
     lit                         last_true_lit;//the last true lit in a falsified clause
     int                         min_delta;
@@ -123,13 +122,10 @@ public:
     uint64_t                    _best_found_hard_cost;
     uint64_t                    _best_found_hard_cost_this_restart;
     uint64_t                    _best_found_soft_cost;
-    uint64_t                    _best_found_hard_cost_this_inner;
     double                      _best_cost_time;
     uint64_t                    _step;
-    uint64_t                    _outer_layer_step;
     uint64_t                    _max_step;
     uint64_t                    _max_tries;
-    uint64_t                    bool_tabu_tenue=0;
 
     // data structure for clause weighting
     uint64_t                    _swt_threshold;
@@ -146,7 +142,6 @@ public:
     bool                        build_instance(std::vector<std::vector<int> >& clause_vec);
     void                        up_bool_vars();
     bool                        local_search();
-    void                        outer_layer_search();//外层只对bool变量进行flip，需要满足2点：与当前bool赋值不同，并且所有纯bool子句都已经满足
     void                        print_solution(bool detailed);
     void                        make_space();
     void                        make_lits_space(uint64_t num_lits){_num_lits=num_lits;_lits.resize(num_lits+_additional_len);};
@@ -176,9 +171,7 @@ public:
     void                        random_walk_all();
     void                        random_walk_all_bool();
     int64_t                     pick_critical_move(int64_t & direction);
-    int64_t                     pick_move_bool_first();
-    int64_t                     pick_move_bool_outer_layer();
-    int                         outer_layer_score(uint64_t var_idx);
+    int64_t                     pick_critical_move_bool(int64_t & direction);
     void                        swap_from_small_weight_clause();
     void                        critical_move(uint64_t var_idx,uint64_t direction);
     void                        update_clause_weight();
@@ -190,9 +183,6 @@ public:
     Array                        *unsat_clause_with_assigned_var;//unsat clause with at least one assigned var
     Array                        *cdcl_lit_with_assigned_var;//unsat cdcl lits with only one assigned var, pick critical move from this set
     Array                        *cdcl_lit_unsolved;//unsolved cdcl lits(unsolved->assigned_var->true/false)
-    Array                        *pure_bool_unsat_clauses;//未满足的纯布尔子句，在外层搜索时需要将其清空
-    Array                        *contain_bool_unsat_clauses;//包含至少一个布尔变量的假子句
-    Array                        *contain_idl_unsat_clauses;//包含至少一个整数文字的假子句
     void                         record_cdcl_lits(std::vector<int> & cdcl_lits);
     std::vector<int>             var_is_assigned;//0 means the var is not assigned
     std::vector<int>             construct_unsat;//0 means the clause is unsat
@@ -204,7 +194,6 @@ public:
     inline void                  sat_a_clause(uint64_t the_clause);
     inline void                  unsat_a_clause(uint64_t the_clause);
     bool                         update_best_solution();
-    bool                         update_inner_best_solution();
     void                         hash_opt(int operation,int &var_idx,int &operation_direction,int &critical_value);
     void                         modifyCC(uint64_t var_idx,uint64_t direction);
     //calculate the score and subscore of a critical operation
