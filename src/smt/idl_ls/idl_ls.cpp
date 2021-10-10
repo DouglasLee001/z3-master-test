@@ -1571,7 +1571,7 @@ bool bool_ls_solver::local_search(){
     for(_step=1;_step<_max_step;_step++){
         if(0==_unsat_hard_clauses.size()){return true;}
         if(_step%1000==0&&(TimeElapsed()>_cutoff)){break;}
-        if(no_improve_cnt>50000){initialize();no_improve_cnt=0;}
+        if(no_improve_cnt>500000){initialize();no_improve_cnt=0;}
         if(mt()%100<99||sat_num_one_clauses->size()==0){//only when 1% probabilty and |sat_num_one_clauses| is more than 1, do the swap from small weight
 //        if(mt()%100<99){
             if(mt()%_lit_in_unsast_clause_num<_bool_lit_in_unsat_clause_num){flipv=pick_critical_move_bool(direction);}
