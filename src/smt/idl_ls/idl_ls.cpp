@@ -6,7 +6,7 @@ bool_ls_solver::bool_ls_solver(){
     softclause_weight_threshold=1;
     _additional_len=10;
     _max_tries=1;
-    _max_step=100000;
+    _max_step=UINT64_MAX;
     _swt_p=0.7;
     _swt_threshold=50;
     smooth_probability=3;
@@ -1081,7 +1081,11 @@ void bool_ls_solver::critical_move(uint64_t var_idx,uint64_t direction){
     else{
         last_move[2*var_idx]=_step;
         tabulist[var_idx*2]=_step+3+mt()%10;
+//        last_move[2*var_idx]=_outer_layer_step;
+//        tabulist[var_idx*2]=_outer_layer_step+3+mt()%10;
         if(CCmode!=-1){modifyCC(var_idx, direction);}
+        bool_tabu_tenue=_step+100+mt()%5;
+        _outer_layer_step++;//每次外层搜索都要flip一个布尔变量，外层步数加一
     }
 }
 
@@ -1206,30 +1210,23 @@ int64_t bool_ls_solver::pick_critical_move(int64_t &direction){
 int64_t bool_ls_solver::pick_critical_move_bool(int64_t & direction){
     int best_score,score,best_var_idx,cnt,operation;
     int best_value=0;
-    int best_safety=INT32_MIN;
     bool BMS=false;
     best_score=1;
     best_var_idx=-1;
     uint64_t best_last_move=UINT64_MAX;
     int        operation_idx=0;
-//    int        operation_idx_out_cc=0;
     for(uint64_t c:_unsat_hard_clauses){
         clause *cl=&(_clauses[c]);
         for(lit l:cl->bool_literals){
             if(is_chosen_bool_var[l.prevar_idx])continue;
+//            if(_outer_layer_step>tabulist[2*l.prevar_idx]&&CClist[2*l.prevar_idx]>0) {
             if(_step>tabulist[2*l.prevar_idx]&&CClist[2*l.prevar_idx]>0) {
-//            if((_step>tabulist[2*l.prevar_idx]&&CCmode==-1)||(CClist[2*l.prevar_idx]>0&&CCmode>=0)) {
                 operation_vec[operation_idx++]=(int)l.prevar_idx;
                 is_chosen_bool_var[l.prevar_idx]=true;
             }
-//            else{
-//                operation_vec_bool[operation_idx_out_cc++]=(int)l.prevar_idx;
-//                is_chosen_bool_var[l.prevar_idx]=true;
-//            }
         }
     }
     for(int i=0;i<operation_idx;i++){is_chosen_bool_var[operation_vec[i]]=false;}// recover chosen_bool_var
-//    for(int i=0;i<operation_idx_out_cc;i++){is_chosen_bool_var[operation_vec_bool[i]]=false;}
     if(operation_idx>45){BMS=true;cnt=45;}
     else{BMS=false;cnt=operation_idx;}
     for(int i=0;i<cnt;i++){
@@ -1240,15 +1237,11 @@ int64_t bool_ls_solver::pick_critical_move_bool(int64_t & direction){
             operation_vec[idx]=tmp;
         }
         else{operation=operation_vec[i];}
-//        operation=operation_vec[i];
-        int var_idx,operation_direction,critical_value,safety;
+        int var_idx,operation_direction,critical_value;
         hash_opt(operation, var_idx, operation_direction, critical_value);
-//            score=critical_score(var_idx, critical_value,safety);
         score=_vars[var_idx].score;
-        safety=0;
         uint64_t last_move_step=last_move[2*var_idx];
-        if(score>best_score||(score==best_score&&safety>best_safety)||(score==best_score&&safety==best_safety&&last_move_step<best_last_move)){
-                best_safety=safety;
+        if(score>best_score||(score==best_score&&last_move_step<best_last_move)){
                 best_score=score;
                 best_var_idx=var_idx;
                 best_last_move=last_move_step;
@@ -1257,30 +1250,6 @@ int64_t bool_ls_solver::pick_critical_move_bool(int64_t & direction){
     }
     //if there is untabu decreasing move
     if(best_var_idx!=-1){return best_var_idx;}
-//    //choose one from the out_cc
-//    best_score=(int)total_clause_weight/_num_clauses;
-//    if(operation_idx_out_cc>45){BMS=true;cnt=45;}
-//    else{BMS=false;cnt=operation_idx_out_cc;}
-//    for(int i=0;i<cnt;i++){
-//        if(BMS){
-//            int idx=mt()%(operation_idx_out_cc-i);
-//            int tmp=operation_vec_bool[operation_idx_out_cc-i-1];
-//            operation=operation_vec_bool[idx];
-//            operation_vec_bool[idx]=tmp;
-//        }
-//        else{operation=operation_vec_bool[i];}
-//        int var_idx,operation_direction,critical_value,safety;
-//        hash_opt(operation, var_idx, operation_direction, critical_value);
-//            score=critical_score(var_idx, critical_value,safety);
-//        uint64_t last_move_step=last_move[2*var_idx];
-//        if(score>best_score||(score==best_score&&safety>best_safety)||(score==best_score&&safety==best_safety&&last_move_step<best_last_move)){
-//            best_safety=safety;
-//            best_score=score;
-//            best_var_idx=var_idx;
-//            best_last_move=last_move_step;
-//        }
-//    }
-//    if(best_var_idx!=-1){return  best_var_idx;}
     //update weight
     if(mt()%10000>smooth_probability){update_clause_weight_critical();}
     else {smooth_clause_weight_critical();}
@@ -1568,6 +1537,7 @@ bool bool_ls_solver::local_search(){
     uint64_t no_improve_cnt=0;
     start = std::chrono::steady_clock::now();
     initialize();
+    _outer_layer_step=1;
     for(_step=1;_step<_max_step;_step++){
         if(0==_unsat_hard_clauses.size()){return true;}
         if(_step%1000==0&&(TimeElapsed()>_cutoff)){break;}

@@ -124,8 +124,10 @@ public:
     uint64_t                    _best_found_soft_cost;
     double                      _best_cost_time;
     uint64_t                    _step;
+    uint64_t                    _outer_layer_step;
     uint64_t                    _max_step;
     uint64_t                    _max_tries;
+    uint64_t                    bool_tabu_tenue=0;
 
     // data structure for clause weighting
     uint64_t                    _swt_threshold;
