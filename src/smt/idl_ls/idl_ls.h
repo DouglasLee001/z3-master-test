@@ -186,6 +186,7 @@ public:
     Array                        *cdcl_lit_with_assigned_var;//unsat cdcl lits with only one assigned var, pick critical move from this set
     Array                        *cdcl_lit_unsolved;//unsolved cdcl lits(unsolved->assigned_var->true/false)
     Array                        *contain_bool_unsat_clauses;//包含至少一个布尔变量的假子句
+    Array                        *contain_idl_unsat_clauses;//包含至少一个整数文字的假子句
     void                         record_cdcl_lits(std::vector<int> & cdcl_lits);
     std::vector<int>             var_is_assigned;//0 means the var is not assigned
     std::vector<int>             construct_unsat;//0 means the clause is unsat
