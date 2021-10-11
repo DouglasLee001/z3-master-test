@@ -66,6 +66,7 @@ void bool_ls_solver::make_space(){
     cdcl_lit_with_assigned_var=new Array(2*(int)_num_lits+(int)_additional_len);
     cdcl_lit_unsolved=new Array(2*(int)_num_lits+(int)_additional_len);
     is_chosen_bool_var.resize(_num_vars+_additional_len,false);
+    contain_bool_unsat_clauses=new Array((int)_num_clauses+(int)_additional_len);
 }
 /// build neighbor_var_idxs for each var
 void bool_ls_solver::build_neighbor_clausenum(){
@@ -770,6 +771,7 @@ void bool_ls_solver::unsat_a_clause(uint64_t the_clause){
         _index_in_unsat_soft_clauses[the_clause]=_unsat_soft_clauses.size();
         _unsat_soft_clauses.push_back(the_clause);
     }
+    if(_clauses[the_clause].bool_literals.size()>0){contain_bool_unsat_clauses->insert_element((int)the_clause);}
 }
 
 void bool_ls_solver::sat_a_clause(uint64_t the_clause){
@@ -795,6 +797,7 @@ void bool_ls_solver::sat_a_clause(uint64_t the_clause){
             _index_in_unsat_soft_clauses[last_item] = index;
             }
         }
+    contain_bool_unsat_clauses->delete_element((int)the_clause);//将该子句从包含bool假子句中删除
 }
 
 /**********calculate the delta of a lit***********/
@@ -1215,8 +1218,8 @@ int64_t bool_ls_solver::pick_critical_move_bool(int64_t & direction){
     best_var_idx=-1;
     uint64_t best_last_move=UINT64_MAX;
     int        operation_idx=0;
-    for(uint64_t c:_unsat_hard_clauses){
-        clause *cl=&(_clauses[c]);
+    for(int i=0;i<contain_bool_unsat_clauses->size();i++){
+        clause *cl=&(_clauses[contain_bool_unsat_clauses->element_at(i)]);
         for(lit l:cl->bool_literals){
             if(is_chosen_bool_var[l.prevar_idx])continue;
            if(_outer_layer_step>tabulist[2*l.prevar_idx]&&CClist[2*l.prevar_idx]>0) {
@@ -1376,23 +1379,6 @@ void bool_ls_solver::hash_opt(int operation,int &var_idx,int &operation_directio
 }
 
 /**********clause weighting***********/
-void bool_ls_solver::update_clause_weight(){
-    clause *cp;
-    for(uint64_t c:_unsat_soft_clauses){
-        cp=&(_clauses[c]);
-        if(cp->weight>softclause_weight_threshold)
-            continue;
-        cp->weight++;
-    }
-    for(uint64_t c:_unsat_hard_clauses){
-        cp=&(_clauses[c]);
-        cp->weight+=h_inc;
-    }
-    total_clause_weight+=_unsat_soft_clauses.size();
-    total_clause_weight+=h_inc*_unsat_hard_clauses.size();
-    if(total_clause_weight>_swt_threshold*_num_clauses)
-        smooth_clause_weight();
-}
 
 //only add clause weight
 void bool_ls_solver::update_clause_weight_critical(){
