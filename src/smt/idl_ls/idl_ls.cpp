@@ -67,7 +67,6 @@ void bool_ls_solver::make_space(){
     cdcl_lit_unsolved=new Array(2*(int)_num_lits+(int)_additional_len);
     is_chosen_bool_var.resize(_num_vars+_additional_len,false);
     contain_bool_unsat_clauses=new Array((int)_num_clauses+(int)_additional_len);
-    contain_idl_unsat_clauses=new Array((int)_num_clauses+(int)_additional_len);
 }
 /// build neighbor_var_idxs for each var
 void bool_ls_solver::build_neighbor_clausenum(){
@@ -773,7 +772,6 @@ void bool_ls_solver::unsat_a_clause(uint64_t the_clause){
         _unsat_soft_clauses.push_back(the_clause);
     }
     if(_clauses[the_clause].bool_literals.size()>0){contain_bool_unsat_clauses->insert_element((int)the_clause);}
-    if(_clauses[the_clause].idl_literals.size()>0){contain_idl_unsat_clauses->insert_element((int)the_clause);}
 }
 
 void bool_ls_solver::sat_a_clause(uint64_t the_clause){
@@ -800,7 +798,6 @@ void bool_ls_solver::sat_a_clause(uint64_t the_clause){
             }
         }
     contain_bool_unsat_clauses->delete_element((int)the_clause);//将该子句从包含bool假子句中删除
-    contain_idl_unsat_clauses->delete_element((int)the_clause);//将该子句从包含idl假子句中删除
 }
 
 /**********calculate the delta of a lit***********/
@@ -1138,8 +1135,8 @@ int64_t bool_ls_solver::pick_critical_move(int64_t &direction){
     uint64_t best_last_move=UINT64_MAX;
     int        operation_idx=0;
     //determine the critical value
-    for(int i=0;i<contain_idl_unsat_clauses->size();i++){
-        clause *cl=&(_clauses[contain_idl_unsat_clauses->element_at(i)]);
+    for(uint64_t c:_unsat_hard_clauses){
+        clause *cl=&(_clauses[c]);
         for(lit l:cl->idl_literals){
             int delta=lit_delta(l);
            if(_step>tabulist[2*l.posvar_idx]&&CClist[2*l.posvar_idx]>0&&l.posvar_idx!=idl_var_idx_with_most_lits){
@@ -1225,7 +1222,8 @@ int64_t bool_ls_solver::pick_critical_move_bool(int64_t & direction){
         clause *cl=&(_clauses[contain_bool_unsat_clauses->element_at(i)]);
         for(lit l:cl->bool_literals){
             if(is_chosen_bool_var[l.prevar_idx])continue;
-            if(_outer_layer_step>tabulist[2*l.prevar_idx]&&CClist[2*l.prevar_idx]>0) {
+           if(_outer_layer_step>tabulist[2*l.prevar_idx]&&CClist[2*l.prevar_idx]>0) {
+            // if(_step>tabulist[2*l.prevar_idx]&&CClist[2*l.prevar_idx]>0) {
                 operation_vec[operation_idx++]=(int)l.prevar_idx;
                 is_chosen_bool_var[l.prevar_idx]=true;
             }
