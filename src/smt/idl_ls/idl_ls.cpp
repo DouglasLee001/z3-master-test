@@ -1079,10 +1079,10 @@ void bool_ls_solver::critical_move(uint64_t var_idx,uint64_t direction){
         if(CCmode!=-1){modifyCC(var_idx,direction);}
     }
     else{
-        last_move[2*var_idx]=_step;
-        tabulist[var_idx*2]=_step+3+mt()%10;
-//        last_move[2*var_idx]=_outer_layer_step;
-//        tabulist[var_idx*2]=_outer_layer_step+3+mt()%10;
+        // last_move[2*var_idx]=_step;
+        // tabulist[var_idx*2]=_step+3+mt()%10;
+       last_move[2*var_idx]=_outer_layer_step;
+       tabulist[var_idx*2]=_outer_layer_step+1+mt()%3;
         if(CCmode!=-1){modifyCC(var_idx, direction);}
         bool_tabu_tenue=_step+100+mt()%5;
         _outer_layer_step++;//每次外层搜索都要flip一个布尔变量，外层步数加一
@@ -1219,8 +1219,8 @@ int64_t bool_ls_solver::pick_critical_move_bool(int64_t & direction){
         clause *cl=&(_clauses[c]);
         for(lit l:cl->bool_literals){
             if(is_chosen_bool_var[l.prevar_idx])continue;
-//            if(_outer_layer_step>tabulist[2*l.prevar_idx]&&CClist[2*l.prevar_idx]>0) {
-            if(_step>tabulist[2*l.prevar_idx]&&CClist[2*l.prevar_idx]>0) {
+           if(_outer_layer_step>tabulist[2*l.prevar_idx]&&CClist[2*l.prevar_idx]>0) {
+            // if(_step>tabulist[2*l.prevar_idx]&&CClist[2*l.prevar_idx]>0) {
                 operation_vec[operation_idx++]=(int)l.prevar_idx;
                 is_chosen_bool_var[l.prevar_idx]=true;
             }
