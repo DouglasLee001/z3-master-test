@@ -509,6 +509,7 @@ bool bool_ls_solver::is_neg(lit &l1, lit &l2){
 
 void bool_ls_solver::clear_prev_data(){
     for(uint64_t v:bool_var_vec){_vars[v].score=0;}
+    _best_found_hard_cost_this_inner=UINT64_MAX;
 }
 /************initialization**************/
 
@@ -1358,6 +1359,14 @@ bool bool_ls_solver::update_best_solution(){
     return improve;
 }
 
+bool bool_ls_solver::update_inner_best_solution(){
+    if(_unsat_hard_clauses.size()<_best_found_hard_cost_this_inner){
+        _best_found_hard_cost_this_inner=_unsat_hard_clauses.size();
+        return true;
+    }
+    return false;
+}
+
 double bool_ls_solver::TimeElapsed(){
     std::chrono::steady_clock::time_point finish = std::chrono::steady_clock::now();
     std::chrono::duration<double> duration = finish - start;
@@ -1521,6 +1530,7 @@ bool bool_ls_solver::local_search(){
     int64_t flipv;
     int64_t direction;//0 means moving forward while 1 means moving backward
     uint64_t no_improve_cnt=0;
+    uint64_t no_improve_cnt_inner=0;//一轮整数搜索的最优未提升次数
     start = std::chrono::steady_clock::now();
     initialize();
     _outer_layer_step=1;
@@ -1532,13 +1542,19 @@ bool bool_ls_solver::local_search(){
 //        if(mt()%100<99){
             // if(mt()%_lit_in_unsast_clause_num<_bool_lit_in_unsat_clause_num)
             if((_lit_in_unsast_clause_num==_bool_lit_in_unsat_clause_num)||(_step>bool_tabu_tenue&&_bool_lit_in_unsat_clause_num>0))
-            {flipv=pick_critical_move_bool(direction);}
+            {
+                flipv=pick_critical_move_bool(direction);
+                _best_found_hard_cost_this_inner=_unsat_hard_clauses.size();
+                no_improve_cnt_inner=0;
+            }
             else{flipv=pick_critical_move(direction);}
         if(flipv!=-1) {critical_move(flipv, direction);}
         }
         else{swap_from_small_weight_clause();}
         if(update_best_solution()) no_improve_cnt=0;
         else                        no_improve_cnt++;
+        if(update_inner_best_solution()) no_improve_cnt_inner=0;
+        else                        no_improve_cnt_inner++;
     }
     return false;
 }
