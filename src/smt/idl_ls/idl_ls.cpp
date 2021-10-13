@@ -1541,7 +1541,7 @@ bool bool_ls_solver::local_search(){
         if(mt()%100<99||sat_num_one_clauses->size()==0){//only when 1% probabilty and |sat_num_one_clauses| is more than 1, do the swap from small weight
 //        if(mt()%100<99){
             // if(mt()%_lit_in_unsast_clause_num<_bool_lit_in_unsat_clause_num)
-            if((_lit_in_unsast_clause_num==_bool_lit_in_unsat_clause_num)||(_step>bool_tabu_tenue&&_bool_lit_in_unsat_clause_num>0))
+            if((_lit_in_unsast_clause_num==_bool_lit_in_unsat_clause_num)||(no_improve_cnt_inner>10&&_bool_lit_in_unsat_clause_num>0))
             {
                 flipv=pick_critical_move_bool(direction);
                 _best_found_hard_cost_this_inner=_unsat_hard_clauses.size();
