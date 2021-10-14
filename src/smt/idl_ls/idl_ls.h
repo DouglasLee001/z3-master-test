@@ -122,7 +122,11 @@ public:
     uint64_t                    _best_found_hard_cost;
     uint64_t                    _best_found_hard_cost_this_restart;
     uint64_t                    _best_found_soft_cost;
-    uint64_t                    _best_found_hard_cost_this_inner;
+    uint64_t                    _best_found_hard_cost_this_idl;
+    uint64_t                    _best_found_hard_cost_this_bool;
+    uint64_t                    no_improve_cnt_bool=0;//一轮整数搜索的最优未提升次数
+    uint64_t                    no_improve_cnt_idl=0;
+    bool                        is_in_bool_search=false;
     double                      _best_cost_time;
     uint64_t                    _step;
     uint64_t                    _outer_layer_step;
@@ -200,6 +204,9 @@ public:
     inline void                  unsat_a_clause(uint64_t the_clause);
     bool                         update_best_solution();
     bool                         update_inner_best_solution();
+    bool                         update_outer_best_solution();
+    void                         enter_bool_mode();
+    void                         enter_idl_mode();
     void                         hash_opt(int operation,int &var_idx,int &operation_direction,int &critical_value);
     void                         modifyCC(uint64_t var_idx,uint64_t direction);
     //calculate the score and subscore of a critical operation

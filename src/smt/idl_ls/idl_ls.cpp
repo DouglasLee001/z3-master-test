@@ -509,7 +509,10 @@ bool bool_ls_solver::is_neg(lit &l1, lit &l2){
 
 void bool_ls_solver::clear_prev_data(){
     for(uint64_t v:bool_var_vec){_vars[v].score=0;}
-    _best_found_hard_cost_this_inner=UINT64_MAX;
+    _best_found_hard_cost_this_bool=UINT64_MAX;
+    _best_found_hard_cost_this_idl=UINTMAX_MAX;
+    no_improve_cnt_bool=0;
+    no_improve_cnt_idl=0;
 }
 /************initialization**************/
 
@@ -1360,11 +1363,29 @@ bool bool_ls_solver::update_best_solution(){
 }
 
 bool bool_ls_solver::update_inner_best_solution(){
-    if(_unsat_hard_clauses.size()<_best_found_hard_cost_this_inner){
-        _best_found_hard_cost_this_inner=_unsat_hard_clauses.size();
+    if(_unsat_hard_clauses.size()<_best_found_hard_cost_this_idl){
+        _best_found_hard_cost_this_idl=_unsat_hard_clauses.size();
         return true;
     }
     return false;
+}
+bool bool_ls_solver::update_outer_best_solution(){
+    if(_unsat_hard_clauses.size()<_best_found_hard_cost_this_bool){
+        _best_found_hard_cost_this_bool=_unsat_hard_clauses.size();
+        return true;
+    }
+    return false;
+}
+
+void bool_ls_solver::enter_idl_mode(){
+    _best_found_hard_cost_this_idl=_unsat_hard_clauses.size();
+    no_improve_cnt_idl=0;
+    is_in_bool_search=false;
+}
+void bool_ls_solver::enter_bool_mode(){
+    _best_found_hard_cost_this_bool=_unsat_hard_clauses.size();
+    no_improve_cnt_bool=0;
+    is_in_bool_search=true;
 }
 
 double bool_ls_solver::TimeElapsed(){
@@ -1530,7 +1551,6 @@ bool bool_ls_solver::local_search(){
     int64_t flipv;
     int64_t direction;//0 means moving forward while 1 means moving backward
     uint64_t no_improve_cnt=0;
-    uint64_t no_improve_cnt_inner=0;//一轮整数搜索的最优未提升次数
     start = std::chrono::steady_clock::now();
     initialize();
     _outer_layer_step=1;
@@ -1541,20 +1561,24 @@ bool bool_ls_solver::local_search(){
         if(mt()%100<99||sat_num_one_clauses->size()==0){//only when 1% probabilty and |sat_num_one_clauses| is more than 1, do the swap from small weight
 //        if(mt()%100<99){
             // if(mt()%_lit_in_unsast_clause_num<_bool_lit_in_unsat_clause_num)
-            if((_lit_in_unsast_clause_num==_bool_lit_in_unsat_clause_num)||(no_improve_cnt_inner>10&&_bool_lit_in_unsat_clause_num>0))
-            {
+            if((is_in_bool_search&&_bool_lit_in_unsat_clause_num<_lit_in_unsast_clause_num&&no_improve_cnt_bool>1)||_bool_lit_in_unsat_clause_num==0){enter_idl_mode();}
+            if((!is_in_bool_search&&_bool_lit_in_unsat_clause_num>0&&no_improve_cnt_idl>10)||(_lit_in_unsast_clause_num==_bool_lit_in_unsat_clause_num)){enter_bool_mode();}
+            if(is_in_bool_search){
                 flipv=pick_critical_move_bool(direction);
-                _best_found_hard_cost_this_inner=_unsat_hard_clauses.size();
-                no_improve_cnt_inner=0;
-            }
-            else{flipv=pick_critical_move(direction);}
-        if(flipv!=-1) {critical_move(flipv, direction);}
+                if(flipv!=-1) {critical_move(flipv, direction);}
+                if(update_outer_best_solution()) no_improve_cnt_bool=0;
+                else                              no_improve_cnt_bool++;
+            }//BOOL MODE
+            else{
+                flipv=pick_critical_move(direction);
+                if(flipv!=-1) {critical_move(flipv, direction);}
+                if(update_inner_best_solution()) no_improve_cnt_idl=0;
+                else                        no_improve_cnt_idl++;
+            }//IDL MODE
         }
         else{swap_from_small_weight_clause();}
         if(update_best_solution()) no_improve_cnt=0;
         else                        no_improve_cnt++;
-        if(update_inner_best_solution()) no_improve_cnt_inner=0;
-        else                        no_improve_cnt_inner++;
     }
     return false;
 }
