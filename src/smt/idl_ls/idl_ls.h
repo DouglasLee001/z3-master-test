@@ -109,6 +109,7 @@ public:
     std::vector<int>            _backward_critical_value;
     //the clause with one sat number, and contains more than one lits
     Array                       *sat_num_one_clauses;
+    Array                       *sat_num_one_pure_bool_binary_clauses;//the pure bool binary clause containing only one satisfied literal
     //the idl_var and bool_var std::vector
     std::vector<uint64_t>       idl_var_vec;
     std::vector<uint64_t>       bool_var_vec;

@@ -63,6 +63,7 @@ void bool_ls_solver::make_space(){
     construct_unsat.resize(_num_clauses);
     last_move.resize(_num_vars*2+_additional_len);
     sat_num_one_clauses=new Array((int)_num_clauses);
+    sat_num_one_pure_bool_binary_clauses=new Array((int)_num_clauses);
     cdcl_lit_with_assigned_var=new Array(2*(int)_num_lits+(int)_additional_len);
     cdcl_lit_unsolved=new Array(2*(int)_num_lits+(int)_additional_len);
     is_chosen_bool_var.resize(_num_vars+_additional_len,false);
@@ -554,8 +555,12 @@ void bool_ls_solver::initialize_clause_datas(){
         }
         else{sat_a_clause(c);}
         if(_clauses[c].sat_count==1){sat_num_one_clauses->insert_element((int)c);
+            if(_clauses[c].literals.size()==2&&_clauses[c].idl_literals.size()==0){sat_num_one_pure_bool_binary_clauses->insert_element((int)c);}
             if(!_clauses[c].watch_lit.is_idl_lit){_vars[_clauses[c].watch_lit.prevar_idx].score--;}}
-        else{sat_num_one_clauses->delete_element((int)c);}
+        else{
+            sat_num_one_clauses->delete_element((int)c);
+            sat_num_one_pure_bool_binary_clauses->delete_element((int)c);
+        }
     }
     total_clause_weight=_num_clauses;
 }
@@ -884,8 +889,12 @@ void bool_ls_solver::critical_score_subscore(uint64_t var_idx,int change_value){
             lit origin_watch_lit=cp->watch_lit;
             uint64_t origin_sat_count=cp->sat_count;
             cp->sat_count+=make_break_in_clause;
-            if(cp->sat_count==1){sat_num_one_clauses->insert_element((int)l.clause_idx);}
-            else{sat_num_one_clauses->delete_element((int)l.clause_idx);}
+            if(cp->sat_count==1){sat_num_one_clauses->insert_element((int)l.clause_idx);
+                if(cp->idl_literals.size()==0&&cp->literals.size()==2){sat_num_one_pure_bool_binary_clauses->insert_element((int)l.clause_idx);}
+            }
+            else{sat_num_one_clauses->delete_element((int)l.clause_idx);
+                sat_num_one_pure_bool_binary_clauses->delete_element((int)l.clause_idx);
+            }
             new_future_min_delta=std::max(0,new_future_min_delta);
             //if new_future_min_delta<=cp->min_delta, then min_delta and watch needs updating if var is changed
             if(new_future_min_delta<=cp->min_delta){
