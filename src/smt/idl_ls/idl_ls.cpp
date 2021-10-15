@@ -66,6 +66,7 @@ void bool_ls_solver::make_space(){
     cdcl_lit_with_assigned_var=new Array(2*(int)_num_lits+(int)_additional_len);
     cdcl_lit_unsolved=new Array(2*(int)_num_lits+(int)_additional_len);
     is_chosen_bool_var.resize(_num_vars+_additional_len,false);
+    pure_bool_unsat_clauses=new Array((int)_num_clauses+(int)_additional_len);
     contain_bool_unsat_clauses=new Array((int)_num_clauses+(int)_additional_len);
 }
 /// build neighbor_var_idxs for each var
@@ -775,6 +776,7 @@ void bool_ls_solver::unsat_a_clause(uint64_t the_clause){
         _index_in_unsat_soft_clauses[the_clause]=_unsat_soft_clauses.size();
         _unsat_soft_clauses.push_back(the_clause);
     }
+    if(_clauses[the_clause].idl_literals.size()==0){pure_bool_unsat_clauses->insert_element((int)the_clause);}//如果该子句是纯布尔子句，则将其加入纯bool假子句
     if(_clauses[the_clause].bool_literals.size()>0){contain_bool_unsat_clauses->insert_element((int)the_clause);}
 }
 
@@ -801,6 +803,7 @@ void bool_ls_solver::sat_a_clause(uint64_t the_clause){
             _index_in_unsat_soft_clauses[last_item] = index;
             }
         }
+    pure_bool_unsat_clauses->delete_element((int)the_clause);//将该子句从纯bool假子句中删除
     contain_bool_unsat_clauses->delete_element((int)the_clause);//将该子句从包含bool假子句中删除
 }
 
