@@ -1573,7 +1573,7 @@ bool bool_ls_solver::local_search(){
         if(mt()%100<99||sat_num_one_clauses->size()==0){//only when 1% probabilty and |sat_num_one_clauses| is more than 1, do the swap from small weight
 //        if(mt()%100<99){
             // if(mt()%_lit_in_unsast_clause_num<_bool_lit_in_unsat_clause_num)
-            bool time_up_bool=(no_improve_cnt_bool*_lit_in_unsast_clause_num>5*_bool_lit_in_unsat_clause_num);
+            bool time_up_bool=(no_improve_cnt_bool*_lit_in_unsast_clause_num>5*_bool_lit_in_unsat_clause_num)||(_unsat_hard_clauses.size()<=15);
             bool time_up_idl=(no_improve_cnt_idl*_lit_in_unsast_clause_num>20*(_lit_in_unsast_clause_num-_bool_lit_in_unsat_clause_num));
             if((is_in_bool_search&&_bool_lit_in_unsat_clause_num<_lit_in_unsast_clause_num&&time_up_bool)||_bool_lit_in_unsat_clause_num==0){enter_idl_mode();}
             if((!is_in_bool_search&&_bool_lit_in_unsat_clause_num>0&&time_up_idl)||(_lit_in_unsast_clause_num==_bool_lit_in_unsat_clause_num)){enter_bool_mode();}
