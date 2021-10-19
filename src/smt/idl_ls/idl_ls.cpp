@@ -1320,6 +1320,9 @@ bool bool_ls_solver::update_best_solution(){
     if(_unsat_hard_clauses.size()<_best_found_hard_cost_this_restart){
         improve=true;
         _best_found_hard_cost_this_restart=_unsat_hard_clauses.size();
+    }
+    if((_unsat_hard_clauses.size()<_best_found_hard_cost)){
+        improve=true;
         _best_cost_time=TimeElapsed();
         _best_found_hard_cost=_unsat_hard_clauses.size();
         _best_solution=_solution;
