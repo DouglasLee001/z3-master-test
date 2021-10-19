@@ -3,7 +3,6 @@ namespace boolidl{
 
 bool_ls_solver::bool_ls_solver(){
     h_inc=1;
-    softclause_weight_threshold=1;
     _additional_len=10;
     _max_tries=1;
     _max_step=UINT64_MAX;
@@ -17,7 +16,6 @@ bool_ls_solver::bool_ls_solver(){
 }
 bool_ls_solver::bool_ls_solver(int random_seed){
     h_inc=1;
-    softclause_weight_threshold=1;
     _additional_len=10;
     _max_tries=1;
     _max_step=UINT64_MAX;
@@ -49,7 +47,6 @@ void bool_ls_solver::make_space(){
     _solution.resize(_num_vars+_additional_len);
     _best_solution.resize(_num_vars+_additional_len);
     _index_in_unsat_hard_clauses.resize(_num_clauses+_additional_len,-1);
-    _index_in_unsat_soft_clauses.resize(_num_clauses+_additional_len,-1);
     tabulist.resize(2*_num_vars+_additional_len);
     CClist.resize(2*_num_vars+_additional_len);
     _forward_critical_value.resize(_num_vars+_additional_len);
@@ -63,11 +60,9 @@ void bool_ls_solver::make_space(){
     construct_unsat.resize(_num_clauses);
     last_move.resize(_num_vars*2+_additional_len);
     sat_num_one_clauses=new Array((int)_num_clauses);
-    sat_num_one_pure_bool_binary_clauses=new Array((int)_num_clauses);
     cdcl_lit_with_assigned_var=new Array(2*(int)_num_lits+(int)_additional_len);
     cdcl_lit_unsolved=new Array(2*(int)_num_lits+(int)_additional_len);
     is_chosen_bool_var.resize(_num_vars+_additional_len,false);
-    pure_bool_unsat_clauses=new Array((int)_num_clauses+(int)_additional_len);
     contain_bool_unsat_clauses=new Array((int)_num_clauses+(int)_additional_len);
 }
 /// build neighbor_var_idxs for each var
@@ -224,7 +219,6 @@ bool bool_ls_solver::build_instance(std::vector<std::vector<int> >& clause_vec){
     if(num_idl_lit>0){_average_k_value/=num_idl_lit;}
     if(_average_k_value<1)_average_k_value=1;
     _best_found_hard_cost=_num_clauses;
-    _best_found_soft_cost=0;
     return true;
 }
 //resolution
@@ -555,11 +549,9 @@ void bool_ls_solver::initialize_clause_datas(){
         }
         else{sat_a_clause(c);}
         if(_clauses[c].sat_count==1){sat_num_one_clauses->insert_element((int)c);
-            if(_clauses[c].literals.size()==2&&_clauses[c].idl_literals.size()==0){sat_num_one_pure_bool_binary_clauses->insert_element((int)c);}
             if(!_clauses[c].watch_lit.is_idl_lit){_vars[_clauses[c].watch_lit.prevar_idx].score--;}}
         else{
             sat_num_one_clauses->delete_element((int)c);
-            sat_num_one_pure_bool_binary_clauses->delete_element((int)c);
         }
     }
     total_clause_weight=_num_clauses;
@@ -777,11 +769,6 @@ void bool_ls_solver::unsat_a_clause(uint64_t the_clause){
         _index_in_unsat_hard_clauses[the_clause]=_unsat_hard_clauses.size();
         _unsat_hard_clauses.push_back(the_clause);
     }
-    else if(_clauses[the_clause].is_hard==false&&_index_in_unsat_soft_clauses[the_clause]==-1){
-        _index_in_unsat_soft_clauses[the_clause]=_unsat_soft_clauses.size();
-        _unsat_soft_clauses.push_back(the_clause);
-    }
-    if(_clauses[the_clause].idl_literals.size()==0){pure_bool_unsat_clauses->insert_element((int)the_clause);}//如果该子句是纯布尔子句，则将其加入纯bool假子句
     if(_clauses[the_clause].bool_literals.size()>0){contain_bool_unsat_clauses->insert_element((int)the_clause);}
 }
 
@@ -798,17 +785,6 @@ void bool_ls_solver::sat_a_clause(uint64_t the_clause){
             _index_in_unsat_hard_clauses[last_item] = index;
             }
         }
-    else if(_clauses[the_clause].is_hard==false&&_index_in_unsat_soft_clauses[the_clause]!=-1){
-        last_item = _unsat_soft_clauses.back();
-        _unsat_soft_clauses.pop_back();
-        index = _index_in_unsat_soft_clauses[the_clause];
-        _index_in_unsat_soft_clauses[last_item]=-1;
-        if(last_item!=the_clause){
-            _unsat_soft_clauses[index] = last_item;
-            _index_in_unsat_soft_clauses[last_item] = index;
-            }
-        }
-    pure_bool_unsat_clauses->delete_element((int)the_clause);//将该子句从纯bool假子句中删除
     contain_bool_unsat_clauses->delete_element((int)the_clause);//将该子句从包含bool假子句中删除
 }
 
@@ -890,10 +866,8 @@ void bool_ls_solver::critical_score_subscore(uint64_t var_idx,int change_value){
             uint64_t origin_sat_count=cp->sat_count;
             cp->sat_count+=make_break_in_clause;
             if(cp->sat_count==1){sat_num_one_clauses->insert_element((int)l.clause_idx);
-                if(cp->idl_literals.size()==0&&cp->literals.size()==2){sat_num_one_pure_bool_binary_clauses->insert_element((int)l.clause_idx);}
             }
             else{sat_num_one_clauses->delete_element((int)l.clause_idx);
-                sat_num_one_pure_bool_binary_clauses->delete_element((int)l.clause_idx);
             }
             new_future_min_delta=std::max(0,new_future_min_delta);
             //if new_future_min_delta<=cp->min_delta, then min_delta and watch needs updating if var is changed
@@ -1098,8 +1072,6 @@ void bool_ls_solver::critical_move(uint64_t var_idx,uint64_t direction){
         if(CCmode!=-1){modifyCC(var_idx,direction);}
     }
     else{
-        // last_move[2*var_idx]=_step;
-        // tabulist[var_idx*2]=_step+3+mt()%10;
        last_move[2*var_idx]=_outer_layer_step;
        tabulist[var_idx*2]=_outer_layer_step+1+mt()%3;
         if(CCmode!=-1){modifyCC(var_idx, direction);}
@@ -1156,11 +1128,9 @@ int64_t bool_ls_solver::pick_critical_move(int64_t &direction){
         for(lit l:cl->idl_literals){
             int delta=lit_delta(l);
            if(_step>tabulist[2*l.posvar_idx]&&CClist[2*l.posvar_idx]>0&&l.posvar_idx!=idl_var_idx_with_most_lits){
-//           if((_step>tabulist[2*l.posvar_idx]&&CCmode==-1)||(CClist[2*l.posvar_idx]>0&&CCmode>=0)){
                operation_vec[operation_idx++]=(delta)*(int)_num_vars+(int)l.posvar_idx;
            }
             if(_step>tabulist[2*l.prevar_idx+1]&&CClist[2*l.prevar_idx+1]>0&&l.prevar_idx!=idl_var_idx_with_most_lits){
-//           if((_step>tabulist[2*l.prevar_idx+1]&&CCmode==-1)||(CClist[2*l.prevar_idx+1]>0&&CCmode>=0)){
                operation_vec[operation_idx++]=(-delta)*(int)_num_vars+(int)l.prevar_idx;
            }
         }
@@ -1176,7 +1146,6 @@ int64_t bool_ls_solver::pick_critical_move(int64_t &direction){
             operation_vec[idx]=tmp;
         }
         else{operation=operation_vec[i];}
-//        operation=operation_vec[i];
         int var_idx,operation_direction,critical_value,safety;
         hash_opt(operation, var_idx, operation_direction, critical_value);
             score=critical_score(var_idx, critical_value,safety);
@@ -1195,17 +1164,14 @@ int64_t bool_ls_solver::pick_critical_move(int64_t &direction){
         if(best_value>0){_forward_critical_value[best_var_idx]=best_value;}
         else{_backward_critical_value[best_var_idx]=-best_value;}
         return best_var_idx;}
-    //TODO:aspiration
     //choose from swap operations if there is no decreasing unsat critical
     operation_idx=0;
   for(int i=0;operation_idx<45&&i<100;i++){add_swap_operation(operation_idx);}
-//    while (operation_idx<45) {add_swap_operation(operation_idx);}
     for(int i=0;i<operation_idx;i++){
         operation=operation_vec[i];
         int var_idx,operation_direction,critical_value,safety;
         hash_opt(operation, var_idx, operation_direction, critical_value);
             score=critical_score(var_idx, critical_value,safety);
-//            if(score>best_score||(score==best_score&&last_move[2*var_idx+(operation_direction+1)%2]<best_last_move)){
         uint64_t last_move_step=(_vars[var_idx].is_idl)?last_move[2*var_idx+(operation_direction+1)%2]:last_move[2*var_idx];
         if(score>best_score||(score==best_score&&safety>best_safety)||(score==best_score&&safety==best_safety&&last_move_step<best_last_move)){
                 best_safety=safety;
@@ -1228,7 +1194,6 @@ int64_t bool_ls_solver::pick_critical_move(int64_t &direction){
 }
 int64_t bool_ls_solver::pick_critical_move_bool(int64_t & direction){
     int best_score,score,best_var_idx,cnt,operation;
-    int best_value=0;
     bool BMS=false;
     best_score=1;
     best_var_idx=-1;
@@ -1239,7 +1204,6 @@ int64_t bool_ls_solver::pick_critical_move_bool(int64_t & direction){
         for(lit l:cl->bool_literals){
             if(is_chosen_bool_var[l.prevar_idx])continue;
            if(_outer_layer_step>tabulist[2*l.prevar_idx]&&CClist[2*l.prevar_idx]>0) {
-            // if(_step>tabulist[2*l.prevar_idx]&&CClist[2*l.prevar_idx]>0) {
                 operation_vec[operation_idx++]=(int)l.prevar_idx;
                 is_chosen_bool_var[l.prevar_idx]=true;
             }
@@ -1256,15 +1220,13 @@ int64_t bool_ls_solver::pick_critical_move_bool(int64_t & direction){
             operation_vec[idx]=tmp;
         }
         else{operation=operation_vec[i];}
-        int var_idx,operation_direction,critical_value;
-        hash_opt(operation, var_idx, operation_direction, critical_value);
+        int var_idx=operation;
         score=_vars[var_idx].score;
         uint64_t last_move_step=last_move[2*var_idx];
         if(score>best_score||(score==best_score&&last_move_step<best_last_move)){
                 best_score=score;
                 best_var_idx=var_idx;
                 best_last_move=last_move_step;
-                best_value=critical_value;
             }
     }
     //if there is untabu decreasing move
@@ -1332,7 +1294,6 @@ void bool_ls_solver::random_walk_all(){
     }
     for(uint64_t i=0;i<operation_idx_bool;i++){
         hash_opt(operation_vec_idl[i], var_idx, operation_direction, critical_value);
-//        score=critical_score(var_idx, critical_value, safety_bool);
         score=_vars[var_idx].score;
         safety_bool=0;
         uint64_t last_move_step=last_move[2*var_idx];
@@ -1359,17 +1320,9 @@ bool bool_ls_solver::update_best_solution(){
     if(_unsat_hard_clauses.size()<_best_found_hard_cost_this_restart){
         improve=true;
         _best_found_hard_cost_this_restart=_unsat_hard_clauses.size();
-//        cout<<"best_found_hard_cost_this_turn:"<<_best_found_hard_cost_this_restart<<endl;
-    }
-    if((_unsat_hard_clauses.size()<_best_found_hard_cost)||(_unsat_hard_clauses.size()==0&&_unsat_soft_clauses.size()<_best_found_soft_cost)){
-        improve=true;
         _best_cost_time=TimeElapsed();
         _best_found_hard_cost=_unsat_hard_clauses.size();
-//        cout<<"best_found_hard_cost"<<_best_found_hard_cost<<endl<<"best_found_soft_cost:"<<_best_found_soft_cost<<" best_step:"<<_step<<" time"<<_best_cost_time<<endl<<endl;
         _best_solution=_solution;
-    }
-    if(_unsat_hard_clauses.size()==0&&_unsat_soft_clauses.size()<_best_found_soft_cost){
-        _best_found_soft_cost=_unsat_soft_clauses.size();
     }
     return improve;
 }
@@ -1425,38 +1378,20 @@ void bool_ls_solver::hash_opt(int operation,int &var_idx,int &operation_directio
 //only add clause weight
 void bool_ls_solver::update_clause_weight_critical(){
     clause *cp;
-    for(uint64_t c:_unsat_soft_clauses){
-        cp=&(_clauses[c]);
-        if(cp->weight>softclause_weight_threshold)
-            continue;
-        cp->weight++;
-    }
     for(uint64_t c:_unsat_hard_clauses){
         cp=&(_clauses[c]);
         cp->weight+=h_inc;
         for(lit &l:cp->bool_literals){_vars[l.prevar_idx].score+=h_inc;}
     }
-    total_clause_weight+=_unsat_soft_clauses.size();
     total_clause_weight+=h_inc*_unsat_hard_clauses.size();
 }
 
-void bool_ls_solver::smooth_clause_weight(){
-    clause *cp;
-    uint64_t scale_ave_weight=total_clause_weight/_num_clauses*(1-_swt_p);
-    total_clause_weight=0;
-    for(uint64_t c=0;c<_num_clauses;c++){
-        cp=&(_clauses[c]);
-        cp->weight=cp->weight*_swt_p+scale_ave_weight;
-        if(cp->weight<1){cp->weight=1;}
-        total_clause_weight+=cp->weight;
-    }
-}
 //only minus the weight of clauses, score and subscore are not updated
 void bool_ls_solver::smooth_clause_weight_critical(){
     clause *cp;
     int weight_delta;
     for(uint64_t c=0;c<_num_clauses;c++){
-       if(_clauses[c].weight>1&&_index_in_unsat_hard_clauses[c]==-1&&_index_in_unsat_soft_clauses[c]==-1){
+       if(_clauses[c].weight>1&&_index_in_unsat_hard_clauses[c]==-1){
             cp=&(_clauses[c]);
             weight_delta=(cp->is_hard)?h_inc:1;
             cp->weight-=weight_delta;
@@ -1464,12 +1399,6 @@ void bool_ls_solver::smooth_clause_weight_critical(){
            if(cp->sat_count==1&&!cp->watch_lit.is_idl_lit){_vars[cp->watch_lit.prevar_idx].score+=weight_delta;}
         }
     }
-}
-int64_t bool_ls_solver::get_cost(){
-    if(_unsat_hard_clauses.size()==0)
-        return _unsat_soft_clauses.size();
-    else
-        return -1;
 }
 /***************print*****************/
 void bool_ls_solver::print_formula(){
@@ -1496,7 +1425,6 @@ void bool_ls_solver::print_literal(lit &l){
 bool bool_ls_solver::check_solution(){
     clause *cp;
     uint64_t unsat_hard_num=0;
-    uint64_t unsat_soft_num=0;
     for(uint64_t i=0;i<_num_clauses;i++){
         bool unsat_flag=false;
         uint64_t sat_count=0;
@@ -1514,7 +1442,6 @@ bool bool_ls_solver::check_solution(){
         }
         if(!unsat_flag){
             if(cp->is_hard) unsat_hard_num++;
-            else unsat_soft_num++;
         }
     }
     if(unsat_hard_num==_unsat_hard_clauses.size())
@@ -1527,7 +1454,6 @@ bool bool_ls_solver::check_solution(){
 bool bool_ls_solver::check_best_solution(){
     clause *cp;
     uint64_t unsat_hard_num=0;
-    uint64_t unsat_soft_num=0;
     for(uint64_t i=0;i<_num_clauses;i++){
         bool unsat_flag=false;
         uint64_t sat_count=0;
@@ -1549,7 +1475,6 @@ bool bool_ls_solver::check_best_solution(){
 
         if(!unsat_flag){
             if(cp->is_hard) unsat_hard_num++;
-            else unsat_soft_num++;
         }
     }
     if(unsat_hard_num==_best_found_hard_cost)
@@ -1571,8 +1496,6 @@ bool bool_ls_solver::local_search(){
         if(_step%1000==0&&(TimeElapsed()>_cutoff)){break;}
         if(no_improve_cnt>500000){initialize();no_improve_cnt=0;}
         if(mt()%100<99||sat_num_one_clauses->size()==0){//only when 1% probabilty and |sat_num_one_clauses| is more than 1, do the swap from small weight
-//        if(mt()%100<99){
-            // if(mt()%_lit_in_unsast_clause_num<_bool_lit_in_unsat_clause_num)
             bool time_up_bool=(no_improve_cnt_bool*_lit_in_unsast_clause_num>5*_bool_lit_in_unsat_clause_num)||(_unsat_hard_clauses.size()<=20);
             bool time_up_idl=(no_improve_cnt_idl*_lit_in_unsast_clause_num>20*(_lit_in_unsast_clause_num-_bool_lit_in_unsat_clause_num));
             if((is_in_bool_search&&_bool_lit_in_unsat_clause_num<_lit_in_unsast_clause_num&&time_up_bool)||_bool_lit_in_unsat_clause_num==0){enter_idl_mode();}
