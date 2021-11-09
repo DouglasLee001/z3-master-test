@@ -97,4 +97,5 @@ z3_add_component(smt
     simplex
     substitution
     idl_ls
+    lia_ls
 )

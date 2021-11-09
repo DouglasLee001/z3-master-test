@@ -52,6 +52,7 @@ Revision History:
 #include "model/model.h"
 #include "solver/progress_callback.h"
 #include "smt/idl_ls/idl_ls.h"
+#include "smt/lia_ls/lia_ls.h"
 #include <tuple>
 
 // there is a significant space overhead with allocating 1000+ contexts in
