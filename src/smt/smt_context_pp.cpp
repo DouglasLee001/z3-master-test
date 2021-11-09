@@ -300,13 +300,13 @@ namespace smt {
         if (!m_b_internalized_stack.empty()) {
             // out << "expression -> bool_var:\n";
             unsigned sz = m_b_internalized_stack.size();
-            out<<sz<<"\n";
+            // out<<sz<<"\n";
             for (unsigned i = 0; i < sz; i++) {
                 expr *  n  = m_b_internalized_stack.get(i);
                 bool_var v = get_bool_var_of_id(n->get_id());
-                out << "(#" << n->get_id() << " -> " << literal(v, false) << ") ";
+                // out << "(#" << n->get_id() << " -> " << literal(v, false) << ") ";
                 literal l_curr=get_literal(n);
-                out<<l_curr.var()<<" ";
+                // out<<l_curr.var()<<" ";
                 if(to_app(n)->get_decl()->get_name()=="or"){
                     out << "or";
                     for (unsigned j = 0; j < to_app(n)->get_num_args(); j++) {
@@ -335,7 +335,7 @@ namespace smt {
 #ifdef NIDL_DEBUG
         std::cout<<sz<<"\n";
 #endif
-            m_ls_solver->make_lits_space(sz);//构造lits的空间
+            // m_ls_solver->make_lits_space(sz);//构造lits的空间
             int new_var_num=0;
             for (uint64_t i = 0; i < sz; i++) {
                 expr *  n  = m_b_internalized_stack.get(i);
@@ -367,10 +367,10 @@ namespace smt {
                 }
                 else{l_curr.display(ss,m,m_bool_var2expr.c_ptr());}//将布尔变量对应的表达式存放在string中
                 myString=ss.str();
-#ifdef IDL_DEBUG
+#ifdef NIDL_DEBUG
                 std::cout<<myString<<"\n";
 #endif
-                m_ls_solver->build_lits(myString);//输入lits
+                // m_ls_solver->build_lits(myString);//输入lits
             }
         }
     }

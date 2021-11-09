@@ -97,7 +97,7 @@ namespace smt {
         m_last_search_result(l_undef),
         m_last_search_failure(UNKNOWN),
         m_searching(false) {
-        m_ls_solver=new boolidl::bool_ls_solver((int)m_fparams.m_random_seed);
+        // m_ls_solver=new boolidl::bool_ls_solver((int)m_fparams.m_random_seed);
         SASSERT(m_scope_lvl == 0);
         SASSERT(m_base_lvl == 0);
         SASSERT(m_search_lvl == 0);
@@ -3648,14 +3648,15 @@ namespace smt {
         }
         else {//如果理论assumption为空,例子会进入此处
             TRACE("before_search", display(tout););
-            if(use_ls){
+            // display_expr_bool_var_map(std::cout);
+            // if(use_ls){
                 expr_bool_var_map();
-                m_ls_solver->build_instance(clauses_vec);
-                m_ls_solver->local_search();
-                std::cout<<"local search best:\n"<<m_ls_solver->_best_found_hard_cost<<"\n";
-                if(m_ls_solver->_best_found_hard_cost==0){std::cout<<"local search sat\n"<<m_timer.get_seconds()<<"\n";return l_true;}
-            }        
-#ifdef IDL_DEBUG
+            //     m_ls_solver->build_instance(clauses_vec);
+            //     m_ls_solver->local_search();
+            //     std::cout<<"local search best:\n"<<m_ls_solver->_best_found_hard_cost<<"\n";
+            //     if(m_ls_solver->_best_found_hard_cost==0){std::cout<<"local search sat\n"<<m_timer.get_seconds()<<"\n";return l_true;}
+            // }        
+#ifdef NIDL_DEBUG
             // display_expr_bool_var_map(std::cout);//在搜索开始之前打印bool变量和表达式的对应关系,在此处将布尔抽象后的文字与文字编号对应起来，即调用了build_lits
             std::cout<<"0\n"<<clauses_vec.size()<<"\n";
             for(auto cl:clauses_vec){
@@ -3668,7 +3669,7 @@ namespace smt {
             // std::cout<<"clause num:"<<m_ls_solver->_num_clauses<<"\n"<<"bool var num:"<<m_ls_solver->_num_bool_vars<<"\n";
             // m_ls_solver->print_formula();
 #endif
-            return check_finalize(search());
+            return check_finalize(l_true);
         }
     }
     //根据参数use_static_features来返回不同的config模式
@@ -4019,10 +4020,10 @@ namespace smt {
                 m_dyn_ack_manager.propagate_eh();//动态acker归结
                 CASSERT("dyn_ack", check_clauses(m_lemmas) && check_clauses(m_aux_clauses));
                 if(use_ls&&((m_timer.get_seconds()-last_enter_ls_time)>ls_time_gap)){
-                    record_assignment();//在归结之后记录下CDCL传递过去的文字数目
-                    double cdcl_bool_lit_percent=(double)m_ls_solver->_num_cdcl_bool_lits/(double)(m_ls_solver->_num_bool_lits);
-                    double cdcl_idl_lit_percent=(double)m_ls_solver->_num_cdcl_idl_lits/(double)(m_ls_solver->_num_idl_lits);
-                    double cdcl_percent=(double)(m_ls_solver->_num_cdcl_idl_lits+m_ls_solver->_num_cdcl_bool_lits)/(double)(m_ls_solver->_num_idl_lits+m_ls_solver->_num_bool_lits);
+                    // record_assignment();//在归结之后记录下CDCL传递过去的文字数目
+                    // double cdcl_bool_lit_percent=(double)m_ls_solver->_num_cdcl_bool_lits/(double)(m_ls_solver->_num_bool_lits);
+                    // double cdcl_idl_lit_percent=(double)m_ls_solver->_num_cdcl_idl_lits/(double)(m_ls_solver->_num_idl_lits);
+                    // double cdcl_percent=(double)(m_ls_solver->_num_cdcl_idl_lits+m_ls_solver->_num_cdcl_bool_lits)/(double)(m_ls_solver->_num_idl_lits+m_ls_solver->_num_bool_lits);
                     // if(cdcl_bool_lit_percent>0.7){
                     //     enter_ls_cnt++;
                     //     last_enter_ls_time=m_timer.get_seconds();//记录下上次进入LS的时间
