@@ -3658,7 +3658,7 @@ namespace smt {
             //     std::cout<<"local search best:\n"<<m_ls_solver->_best_found_hard_cost<<"\n";
             //     if(m_ls_solver->_best_found_hard_cost==0){std::cout<<"local search sat\n"<<m_timer.get_seconds()<<"\n";return l_true;}
             // }        
-#ifdef NIDL_DEBUG
+#ifdef IDL_DEBUG
             // display_expr_bool_var_map(std::cout);//在搜索开始之前打印bool变量和表达式的对应关系,在此处将布尔抽象后的文字与文字编号对应起来，即调用了build_lits
             std::cout<<"0\n"<<clauses_vec.size()<<"\n";
             for(auto cl:clauses_vec){

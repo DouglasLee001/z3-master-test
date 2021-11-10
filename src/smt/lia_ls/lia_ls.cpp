@@ -127,7 +127,7 @@ ls_solver::ls_solver()
 :_swt_p(0.3),
 _swt_threshold(50),
 smooth_probability(3),
-_cutoff(600),
+_cutoff(1200),
 _additional_len(10),
 _max_step(UINT64_MAX),
 CC_mode(-1)
@@ -137,7 +137,7 @@ ls_solver::ls_solver(int random_seed)
 :_swt_p(0.3),
 _swt_threshold(50),
 smooth_probability(3),
-_cutoff(600),
+_cutoff(1200),
 _additional_len(10),
 _max_step(UINT64_MAX),
 CC_mode(-1)
