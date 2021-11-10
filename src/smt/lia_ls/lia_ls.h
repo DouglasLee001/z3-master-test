@@ -53,6 +53,7 @@ public:
     uint64_t                    _num_vars;
     uint64_t                    _num_lits;
     uint64_t                    _num_clauses;
+    uint64_t                    _num_opt=0;//the number of vars in all literals, which is the max number of operations
     std::vector<variable>       _vars;
     std::vector<lit>            _lits;
     std::vector<clause>         _clauses;

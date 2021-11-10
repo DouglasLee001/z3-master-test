@@ -45,6 +45,8 @@ void ls_solver::build_lits(std::string &in_string){
                     l->pos_coff.push_back(1);
                     l->pos_coff_var_idx.push_back((int)transfer_name_to_var(vec[idx]));
                 }
+                _num_opt+=l->pos_coff.size();
+                _num_opt+=l->neg_coff.size();
             }
             l->key=-std::atoi(vec[++idx].c_str());
             if(vec[2]==">="){l->key++;invert_lit(*l);}
@@ -148,7 +150,7 @@ void ls_solver::make_space(){
     tabulist.resize(2*_num_vars+_additional_len,0);
     CClist.resize(2*_num_vars+_additional_len,1);
     operation_var_idx_vec.resize(2*_num_lits+_additional_len);
-    operation_change_value_vec.resize(2*_num_lits+_additional_len);
+    operation_change_value_vec.resize(_num_opt+_additional_len);
     last_move.resize(2*_num_vars+_additional_len,0);
     unsat_clauses=new Array((int)_num_clauses+(int)_additional_len);
 }

@@ -98,7 +98,7 @@ namespace smt {
         m_last_search_failure(UNKNOWN),
         m_searching(false) {
         // m_ls_solver=new boolidl::bool_ls_solver((int)m_fparams.m_random_seed);
-        m_lia_ls_solver=new lia::ls_solver((int)m_fparams.m_random_seed);
+        m_lia_ls_solver=new lia::ls_solver(0);
         SASSERT(m_scope_lvl == 0);
         SASSERT(m_base_lvl == 0);
         SASSERT(m_search_lvl == 0);
@@ -3673,8 +3673,8 @@ namespace smt {
              m_lia_ls_solver->print_formula();
 #endif
             m_lia_ls_solver->local_search();
-            std::cout<<"local search best:\n"<<m_lia_ls_solver->best_found_cost<<"\n";
-            if(m_lia_ls_solver->best_found_cost==0){std::cout<<"local search sat\n"<<m_timer.get_seconds()<<"\n";return l_true;}
+            // std::cout<<"local search best:\n"<<m_lia_ls_solver->best_found_cost<<"\n";
+            // if(m_lia_ls_solver->best_found_cost==0){std::cout<<"local search sat\n"<<m_timer.get_seconds()<<"\n";return l_true;}
             return check_finalize(l_true);
         }
     }
