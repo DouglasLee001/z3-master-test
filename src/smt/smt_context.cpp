@@ -98,6 +98,7 @@ namespace smt {
         m_last_search_failure(UNKNOWN),
         m_searching(false) {
         // m_ls_solver=new boolidl::bool_ls_solver((int)m_fparams.m_random_seed);
+        m_lia_ls_solver=new lia::ls_solver((int)m_fparams.m_random_seed);
         SASSERT(m_scope_lvl == 0);
         SASSERT(m_base_lvl == 0);
         SASSERT(m_search_lvl == 0);
@@ -3652,6 +3653,7 @@ namespace smt {
             // if(use_ls){
                 expr_bool_var_map();
             //     m_ls_solver->build_instance(clauses_vec);
+            m_lia_ls_solver->build_instance(clauses_vec);
             //     m_ls_solver->local_search();
             //     std::cout<<"local search best:\n"<<m_ls_solver->_best_found_hard_cost<<"\n";
             //     if(m_ls_solver->_best_found_hard_cost==0){std::cout<<"local search sat\n"<<m_timer.get_seconds()<<"\n";return l_true;}
@@ -3668,7 +3670,11 @@ namespace smt {
             // display_assignment(std::cout);//在搜索开始之前先获取已经单元传播赋值的部分bool变量
             // std::cout<<"clause num:"<<m_ls_solver->_num_clauses<<"\n"<<"bool var num:"<<m_ls_solver->_num_bool_vars<<"\n";
             // m_ls_solver->print_formula();
+             m_lia_ls_solver->print_formula();
 #endif
+            m_lia_ls_solver->local_search();
+            std::cout<<"local search best:\n"<<m_lia_ls_solver->best_found_cost<<"\n";
+            if(m_lia_ls_solver->best_found_cost==0){std::cout<<"local search sat\n"<<m_timer.get_seconds()<<"\n";return l_true;}
             return check_finalize(l_true);
         }
     }

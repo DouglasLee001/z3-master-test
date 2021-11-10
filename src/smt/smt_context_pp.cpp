@@ -251,7 +251,7 @@ namespace smt {
                 if(lit.sign()){cdcl_assignment=-cdcl_assignment;}
                 cdcl_lits[cdcl_lit_size++]=cdcl_assignment;
             }
-            m_ls_solver->record_cdcl_lits(cdcl_lits);
+            // m_ls_solver->record_cdcl_lits(cdcl_lits);
         }
     }
 
@@ -336,6 +336,7 @@ namespace smt {
         std::cout<<sz<<"\n";
 #endif
             // m_ls_solver->make_lits_space(sz);//构造lits的空间
+            m_lia_ls_solver->make_lits_space(sz);
             int new_var_num=0;
             for (uint64_t i = 0; i < sz; i++) {
                 expr *  n  = m_b_internalized_stack.get(i);
@@ -371,6 +372,7 @@ namespace smt {
                 std::cout<<myString<<"\n";
 #endif
                 // m_ls_solver->build_lits(myString);//输入lits
+                m_lia_ls_solver->build_lits(myString);
             }
         }
     }

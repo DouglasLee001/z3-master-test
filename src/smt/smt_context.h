@@ -79,7 +79,8 @@ namespace smt {
 
 
     protected:
-        boolidl::bool_ls_solver *   m_ls_solver;
+        boolidl::bool_ls_solver *   m_bool_ls_solver;
+        lia::ls_solver *            m_lia_ls_solver;
         ast_manager &               m;
         smt_params &                m_fparams;
         params_ref                  m_params;
