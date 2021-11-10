@@ -149,7 +149,7 @@ void ls_solver::make_space(){
     _best_solutin.resize(_num_vars+_additional_len);
     tabulist.resize(2*_num_vars+_additional_len,0);
     CClist.resize(2*_num_vars+_additional_len,1);
-    operation_var_idx_vec.resize(2*_num_lits+_additional_len);
+    operation_var_idx_vec.resize(_num_opt+_additional_len);
     operation_change_value_vec.resize(_num_opt+_additional_len);
     last_move.resize(2*_num_vars+_additional_len,0);
     unsat_clauses=new Array((int)_num_clauses+(int)_additional_len);
