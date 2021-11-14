@@ -152,6 +152,7 @@ void ls_solver::reduce_vars(){
         for(int i=0;i<l->pos_coff.size();i++){
             pos_var_idx=l->pos_coff_var_idx[i];
             for(int j=0;j<l->neg_coff.size();j++){
+                if(l->pos_coff[i]!=l->neg_coff[j]){continue;}
                 neg_var_idx=l->neg_coff_var_idx[j];
                 if(neg_var_idx<pos_var_idx){hash_map[neg_var_idx*tmp_vars_size+pos_var_idx]++;}//small_idx* num_var+ large_idx
                 else{hash_map[pos_var_idx*tmp_vars_size+neg_var_idx]++;}
