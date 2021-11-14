@@ -33,17 +33,17 @@ void ls_solver::build_lits(std::string &in_string){
                     int coff=std::atoi(vec[idx].c_str());
                     if(coff>0){
                         l->pos_coff.push_back(coff);
-                        l->pos_coff_var_idx.push_back((int)transfer_name_to_var(vec[++idx]));
+                        l->pos_coff_var_idx.push_back((int)transfer_name_to_tmp_var(vec[++idx]));
                     }
                     else{
                         l->neg_coff.push_back(-coff);
-                        l->neg_coff_var_idx.push_back((int)transfer_name_to_var(vec[++idx]));
+                        l->neg_coff_var_idx.push_back((int)transfer_name_to_tmp_var(vec[++idx]));
                     }
                     idx++;
                 }
                 else{
                     l->pos_coff.push_back(1);
-                    l->pos_coff_var_idx.push_back((int)transfer_name_to_var(vec[idx]));
+                    l->pos_coff_var_idx.push_back((int)transfer_name_to_tmp_var(vec[idx]));
                 }
                 _num_opt+=l->pos_coff.size();
                 _num_opt+=l->neg_coff.size();
@@ -54,9 +54,9 @@ void ls_solver::build_lits(std::string &in_string){
         else{
             l->lits_index=0;
             int bound=std::atoi(vec[4].c_str());
-            uint64_t var_idx=transfer_name_to_var(vec[3]);
-            if(vec[2]==">="){_vars[var_idx].low_bound=std::max(_vars[var_idx].low_bound,bound);}
-            else if(vec[2]=="<="){_vars[var_idx].upper_bound=std::min(_vars[var_idx].upper_bound,bound);}
+            uint64_t var_idx=transfer_name_to_tmp_var(vec[3]);
+            if(vec[2]==">="){_tmp_vars[var_idx].low_bound=std::max(_tmp_vars[var_idx].low_bound,bound);}
+            else if(vec[2]=="<="){_tmp_vars[var_idx].upper_bound=std::min(_tmp_vars[var_idx].upper_bound,bound);}
         }//( >= x 0 )
         
     }//lia lit
@@ -67,6 +67,7 @@ void ls_solver::build_lits(std::string &in_string){
 }
 
 void ls_solver::build_instance(std::vector<std::vector<int> >& clause_vec){
+    reduce_vars();
     _clauses.resize(clause_vec.size());
     _num_clauses=0;
     for (auto clause_curr:clause_vec) {
@@ -120,6 +121,118 @@ uint64_t ls_solver::transfer_name_to_var(std::string & name){
         return _vars.size()-1;
     }
     else return name2var[name];
+}
+
+uint64_t ls_solver::transfer_name_to_tmp_var(std::string & name){
+    if(name2var.find(name)==name2var.end()){
+        name2var[name]=_tmp_vars.size();
+        variable var;
+        var.var_name=name;
+        _tmp_vars.push_back(var);
+        return _tmp_vars.size()-1;
+    }
+    else return name2var[name];
+}
+
+void ls_solver::reduce_vars(){
+    const uint64_t tmp_vars_size=_tmp_vars.size();
+    std::vector<int> hash_map(tmp_vars_size*tmp_vars_size,0);//hash_map[A*(size)+b]=n means A-B has occurred n times
+    std::vector<int> occur_time(tmp_vars_size,0);//occur_time[a]=n means that a has occured in lits for n times
+    Array *pair_x=new Array((int)tmp_vars_size);
+    Array *pair_y=new Array((int)tmp_vars_size);
+    lit *l;
+    variable * original_var;
+    variable * new_var;
+    std::string var_name;
+    int pos_var_idx,neg_var_idx,original_var_idx;
+    //calculate the hash_map
+    for(uint64_t l_idx=0;l_idx<_num_lits;l_idx++){
+        l=&(_lits[l_idx]);
+        if(l->lits_index==0){continue;}
+        for(int i=0;i<l->pos_coff.size();i++){
+            pos_var_idx=l->pos_coff_var_idx[i];
+            for(int j=0;j<l->neg_coff.size();j++){
+                neg_var_idx=l->neg_coff_var_idx[j];
+                if(neg_var_idx<pos_var_idx){hash_map[neg_var_idx*tmp_vars_size+pos_var_idx]++;}//small_idx* num_var+ large_idx
+                else{hash_map[pos_var_idx*tmp_vars_size+neg_var_idx]++;}
+            }
+        }
+    }
+    //calculate the occur time
+    for(uint64_t l_idx=0;l_idx<_num_lits;l_idx++){
+        l=&(_lits[l_idx]);
+        if(l->lits_index==0){continue;}
+        for(int i=0;i<l->pos_coff.size();i++){occur_time[l->pos_coff_var_idx[i]]++;}
+        for(int i=0;i<l->neg_coff.size();i++){occur_time[l->neg_coff_var_idx[i]]++;}
+    }
+    //calculate the x-y pair
+    for(int pre_idx=0;pre_idx<tmp_vars_size;pre_idx++){
+        if(pair_y->is_in_array(pre_idx)){continue;}//prevent reinsert
+        for(int pos_idx=pre_idx;pos_idx<tmp_vars_size;pos_idx++){
+            if(hash_map[pre_idx*tmp_vars_size+pos_idx]==occur_time[pre_idx]){
+                pair_x->insert_element(pre_idx);
+                pair_y->insert_element(pos_idx);
+                break;
+            }
+        }
+    }
+    name2var.clear();
+    //rewrite lits
+    for(uint64_t l_idx=0;l_idx<_num_lits;l_idx++){
+        l=&(_lits[l_idx]);
+        lit new_lit;
+        if(l->lits_index==0){continue;}
+        new_lit.key=l->key;
+        new_lit.lits_index=l->lits_index;
+        for(int i=0;i<l->pos_coff.size();i++){
+            original_var_idx=l->pos_coff_var_idx[i];
+            original_var=&(_tmp_vars[original_var_idx]);
+            if(pair_x->is_in_array(original_var_idx)){
+                new_lit.pos_coff.push_back(l->pos_coff[i]);
+//                var_name="_new_var_"+std::to_string(pair_x->index_of(original_var_idx));
+                var_name="_new_var_"+original_var->var_name;
+                new_lit.pos_coff_var_idx.push_back((int)transfer_name_to_var(var_name));
+            }
+            else if(pair_y->is_in_array(original_var_idx)){
+                new_lit.neg_coff.push_back(l->pos_coff[i]);
+//                var_name="_new_var_"+std::to_string(pair_y->index_of(original_var_idx));
+                var_name="_new_var_"+_tmp_vars[pair_x->element_at(pair_y->index_of(original_var_idx))].var_name;
+                new_lit.neg_coff_var_idx.push_back((int)transfer_name_to_var(var_name));
+            }
+            else{
+                new_lit.pos_coff.push_back(l->pos_coff[i]);
+                new_lit.pos_coff_var_idx.push_back((int)transfer_name_to_var(original_var->var_name));
+            }
+        }
+        for(int i=0;i<l->neg_coff.size();i++){
+            original_var_idx=l->neg_coff_var_idx[i];
+            original_var=&(_tmp_vars[original_var_idx]);
+            if(!pair_x->is_in_array(original_var_idx)&&!pair_y->is_in_array(original_var_idx)){
+                new_lit.neg_coff.push_back(l->neg_coff[i]);
+                new_lit.neg_coff_var_idx.push_back((int)transfer_name_to_var(original_var->var_name));
+            }
+        }
+        _lits[l_idx]=new_lit;
+    }
+    //set low and upbound
+    for(original_var_idx=0;original_var_idx<_tmp_vars.size();original_var_idx++){
+        original_var=&(_tmp_vars[original_var_idx]);
+        //original var
+        if(!pair_x->is_in_array(original_var_idx)&&!pair_y->is_in_array(original_var_idx)){
+            new_var=&(_vars[transfer_name_to_var(original_var->var_name)]);
+            new_var->low_bound=original_var->low_bound;
+            new_var->upper_bound=original_var->upper_bound;
+        }
+        //new var
+        else if(pair_x->is_in_array(original_var_idx)){
+            int pair_idx=pair_x->index_of(original_var_idx);
+//            var_name="_new_var_"+std::to_string(pair_idx);
+            var_name="_new_var_"+original_var->var_name;
+            new_var=&(_vars[transfer_name_to_var(var_name)]);
+            new_var->upper_bound=original_var->upper_bound-_tmp_vars[pair_y->element_at(pair_idx)].low_bound;
+            new_var->low_bound=original_var->low_bound-_tmp_vars[pair_y->element_at(pair_idx)].upper_bound;
+        }
+    }
 }
 
 //initialize

@@ -18,6 +18,7 @@
 #include "smt/lia_ls/lia_Array.h"
 
 namespace lia {
+const int max_int=2147483640;
 //one arith lit is in the form of a_1*x_1+...+a_n*x_n+k<=0, the cofficient are divided into positive ones and negative ones, the coff are positive.
 //if neg_coff =1 neg_coff_var=x pos_coff=1 pos_coff_var=y means y-x
 struct lit{
@@ -36,8 +37,8 @@ struct variable{
     std::vector<int>            literal_coff;//literal_coff[i] denotes the coff of the var in corresponding literal
     std::vector<uint64_t>       clause_idxs;
     std::string                 var_name;
-    int                         low_bound=-INT32_MIN;
-    int                         upper_bound=INT32_MAX;
+    int                         low_bound=-max_int;
+    int                         upper_bound=max_int;
 };
 
 struct clause{
@@ -55,6 +56,7 @@ public:
     uint64_t                    _num_clauses;
     uint64_t                    _num_opt=0;//the number of vars in all literals, which is the max number of operations
     std::vector<variable>       _vars;
+    std::vector<variable>       _tmp_vars;
     std::vector<lit>            _lits;
     std::vector<clause>         _clauses;
     Array                       *unsat_clauses;
@@ -89,6 +91,8 @@ public:
     void                        build_lits(std::string &in_string);
     void                        build_instance(std::vector<std::vector<int> >& clause_vec);
     uint64_t                    transfer_name_to_var(std::string & name);
+    uint64_t                    transfer_name_to_tmp_var(std::string &name);
+    void                        reduce_vars();//reduce the x-y in all lits to new var z
     
     
     //initialize
