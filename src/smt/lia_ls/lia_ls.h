@@ -58,6 +58,7 @@ public:
     std::vector<variable>       _vars;
     std::vector<variable>       _tmp_vars;
     std::vector<lit>            _lits;
+    std::vector<int>            _bound_lits;//record the index of bounded lits
     std::vector<clause>         _clauses;
     Array                       *unsat_clauses;
     //solution

@@ -52,6 +52,7 @@ void ls_solver::build_lits(std::string &in_string){
             if(vec[2]==">="){l->key++;invert_lit(*l);}
         }//( <= ( + x1 ( * -1 x2 ) x7 ( * -1 x8 ) ) 0 )
         else{
+            _bound_lits.push_back(lit_index);
             l->lits_index=0;
             int bound=std::atoi(vec[4].c_str());
             uint64_t var_idx=transfer_name_to_tmp_var(vec[3]);
@@ -232,6 +233,28 @@ void ls_solver::reduce_vars(){
             new_var=&(_vars[transfer_name_to_var(var_name)]);
             new_var->upper_bound=original_var->upper_bound-_tmp_vars[pair_y->element_at(pair_idx)].low_bound;
             new_var->low_bound=original_var->low_bound-_tmp_vars[pair_y->element_at(pair_idx)].upper_bound;
+        }
+    }
+    int num_var_with_bound=0;
+    for(int var_idx=0;var_idx<_vars.size();var_idx++){
+        new_var=&(_vars[var_idx]);
+        if(new_var->low_bound!=-max_int){
+            int lit_idx=_bound_lits[num_var_with_bound++];
+            l=&(_lits[lit_idx]);
+            l->lits_index=lit_idx;
+            l->neg_coff.push_back(1);
+            l->neg_coff_var_idx.push_back(var_idx);
+            l->key=new_var->low_bound;
+            new_var->low_bound=-max_int;
+        }
+        if(new_var->upper_bound!=max_int){
+            int lit_idx=_bound_lits[num_var_with_bound++];
+            l=&(_lits[lit_idx]);
+            l->lits_index=lit_idx;
+            l->pos_coff.push_back(1);
+            l->pos_coff_var_idx.push_back(var_idx);
+            l->key=-new_var->upper_bound;
+            new_var->upper_bound=max_int;
         }
     }
 }
