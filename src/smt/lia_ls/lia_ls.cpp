@@ -604,7 +604,9 @@ void ls_solver::print_literal(lit &l){
 }
 
 void ls_solver::print_lit_pbs(lit &l){
-    std::cout<<_num_vars+1<<" "<<l.key<<" ";
+    int degree=l.key;
+    for(int i=0;i<l.pos_coff.size();i++){degree+=l.pos_coff[i];}
+    std::cout<<_num_vars+1<<" "<<degree<<" ";
     for(int i=0;i<l.pos_coff.size();i++)
     {std::cout<<l.pos_coff[i]<<" "<<-(l.pos_coff_var_idx[i]+1)<<" ";}
     for(int i=0;i<l.neg_coff.size();i++)    {std::cout<<l.neg_coff[i]<<" "<<l.neg_coff_var_idx[i]+1<<" ";}
