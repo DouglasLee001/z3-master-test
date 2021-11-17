@@ -146,6 +146,12 @@ void ls_solver::reduce_vars(){
     variable * new_var;
     std::string var_name;
     int pos_var_idx,neg_var_idx,original_var_idx;
+    use_pbs=true;
+    for(int var_idx=0;var_idx<tmp_vars_size;var_idx++){
+        if(_tmp_vars[var_idx].upper_bound>1||_tmp_vars[var_idx].low_bound<0){use_pbs=false;break;}
+    }
+    if(use_pbs){_vars=_tmp_vars;}
+    else{
     //calculate the hash_map
     for(uint64_t l_idx=0;l_idx<_num_lits;l_idx++){
         l=&(_lits[l_idx]);
@@ -234,6 +240,7 @@ void ls_solver::reduce_vars(){
             new_var->upper_bound=original_var->upper_bound-_tmp_vars[pair_y->element_at(pair_idx)].low_bound;
             new_var->low_bound=original_var->low_bound-_tmp_vars[pair_y->element_at(pair_idx)].upper_bound;
         }
+    }
     }
     int num_var_with_bound=0;
     for(int var_idx=0;var_idx<_vars.size();var_idx++){
@@ -576,12 +583,32 @@ void ls_solver::print_formula(){
     }
 }
 
+void ls_solver::print_formula_pbs(){
+    std::cout<<"p wcnf "<<_num_vars<<" "<<(_num_lits-_num_vars*2)<<" "<<_num_vars+1<<"\n";
+    for(int lit_idx=1;lit_idx<_num_lits;lit_idx++){
+        lit *l=&(_lits[lit_idx]);
+        if(l->pos_coff.size()==1&&l->neg_coff.size()==0&&l->pos_coff[0]==1&&l->key==-1){continue;}
+        if(l->neg_coff.size()==1&&l->pos_coff.size()==0&&l->neg_coff[0]==1&&l->key==0){continue;}
+        if(l->lits_index==0){continue;}
+        print_lit_pbs(_lits[lit_idx]);
+    }
+    std::cout<<"2 0 1 1 0\n";
+}
+
 void ls_solver::print_literal(lit &l){
     for(int i=0;i<l.pos_coff.size();i++)
         {std::cout<<"( "<<l.pos_coff[i]<<" * "<<_vars[l.pos_coff_var_idx[i]].var_name<<" ) + ";}
     for(int i=0;i<l.neg_coff.size();i++)
         {std::cout<<"( -"<<l.neg_coff[i]<<" * "<<_vars[l.neg_coff_var_idx[i]].var_name<<" ) + ";}
     std::cout<<"( "<<l.key<<" ) <= 0\n";
+}
+
+void ls_solver::print_lit_pbs(lit &l){
+    std::cout<<_num_vars+1<<" "<<l.key<<" ";
+    for(int i=0;i<l.pos_coff.size();i++)
+    {std::cout<<l.pos_coff[i]<<" "<<-(l.pos_coff_var_idx[i]+1)<<" ";}
+    for(int i=0;i<l.neg_coff.size();i++)    {std::cout<<l.neg_coff[i]<<" "<<l.neg_coff_var_idx[i]+1<<" ";}
+    std::cout<<"0\n";
 }
 
 //calculate score

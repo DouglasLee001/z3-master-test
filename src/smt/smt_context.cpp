@@ -3672,6 +3672,7 @@ namespace smt {
             // m_ls_solver->print_formula();
              m_lia_ls_solver->print_formula();
 #endif
+            // m_lia_ls_solver->print_formula_pbs();
             m_lia_ls_solver->local_search();
             std::cout<<"local search best:\n"<<m_lia_ls_solver->best_found_cost<<"\n";
             if(m_lia_ls_solver->best_found_cost==0){std::cout<<"local search sat\n"<<m_timer.get_seconds()<<"\n";return l_true;}

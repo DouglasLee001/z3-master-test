@@ -61,6 +61,7 @@ public:
     std::vector<int>            _bound_lits;//record the index of bounded lits
     std::vector<clause>         _clauses;
     Array                       *unsat_clauses;
+    bool                        use_pbs=false;
     //solution
     std::vector<int>            _solution;
     std::vector<int>            _best_solutin;
@@ -134,6 +135,8 @@ public:
     //print
     void                        print_formula();
     void                        print_literal(lit &l);
+    void                        print_formula_pbs();
+    void                        print_lit_pbs(lit &l);
     //calculate score
     int                         critical_score(uint64_t var_idx,int change_value);
     int                         critical_subscore(uint64_t var_idx,int change_value);
