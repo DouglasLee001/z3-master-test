@@ -52,12 +52,11 @@ void ls_solver::build_lits(std::string &in_string){
             if(vec[2]==">="){l->key++;invert_lit(*l);}
         }//( <= ( + x1 ( * -1 x2 ) x7 ( * -1 x8 ) ) 0 )
         else{
-            _bound_lits.push_back(lit_index);
-            l->lits_index=0;
+            l->lits_index=std::atoi(vec[0].c_str());
             int64_t bound=std::atoi(vec[4].c_str());
             uint64_t var_idx=transfer_name_to_tmp_var(vec[3]);
-            if(vec[2]==">="){_tmp_vars[var_idx].low_bound=std::max(_tmp_vars[var_idx].low_bound,bound);}
-            else if(vec[2]=="<="){_tmp_vars[var_idx].upper_bound=std::min(_tmp_vars[var_idx].upper_bound,bound);}
+            if(vec[2]==">="){l->key=bound;l->neg_coff.push_back(1);l->neg_coff_var_idx.push_back((int)var_idx);}
+            else if(vec[2]=="<="){l->key=-bound;l->pos_coff.push_back(1);l->pos_coff_var_idx.push_back((int)var_idx);}
         }//( >= x 0 )
         
     }//lia lit
@@ -68,6 +67,21 @@ void ls_solver::build_lits(std::string &in_string){
 }
 
 void ls_solver::build_instance(std::vector<std::vector<int> >& clause_vec){
+    for(auto clause_curr:clause_vec){
+        if(clause_curr.size()==1){
+            lit *l=&(_lits[clause_curr[0]]);
+            if(l->pos_coff.size()==0&&l->neg_coff.size()==1){
+                _tmp_vars[l->neg_coff_var_idx[0]].low_bound=l->key;
+                _bound_lits.push_back(l->lits_index);
+                l->lits_index=0;
+            }
+            else if(l->pos_coff.size()==1&&l->neg_coff.size()==0){
+                _tmp_vars[l->pos_coff_var_idx[0]].upper_bound=-l->key;
+                _bound_lits.push_back(l->lits_index);
+                l->lits_index=0;
+            }
+        }
+    }
     reduce_vars();
     _clauses.resize(clause_vec.size());
     _num_clauses=0;
@@ -237,8 +251,14 @@ void ls_solver::reduce_vars(){
 //            var_name="_new_var_"+std::to_string(pair_idx);
             var_name="_new_var_"+original_var->var_name;
             new_var=&(_vars[transfer_name_to_var(var_name)]);
-            new_var->upper_bound=original_var->upper_bound-_tmp_vars[pair_y->element_at(pair_idx)].low_bound;
-            new_var->low_bound=original_var->low_bound-_tmp_vars[pair_y->element_at(pair_idx)].upper_bound;
+            int64_t x_low=original_var->low_bound;
+            int64_t x_upper=original_var->upper_bound;
+            int64_t y_low=_tmp_vars[pair_y->element_at(pair_idx)].low_bound;
+            int64_t y_upper=_tmp_vars[pair_y->element_at(pair_idx)].upper_bound;
+            if(x_low==-max_int||y_upper==max_int){new_var->low_bound=-max_int;}
+            else{new_var->low_bound=x_low-y_upper;}
+            if(x_upper==max_int||y_low==-max_int){new_var->upper_bound=max_int;}
+            else{new_var->upper_bound=x_upper-y_low;}
         }
     }
     }
