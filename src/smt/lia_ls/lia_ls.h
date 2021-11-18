@@ -18,27 +18,27 @@
 #include "smt/lia_ls/lia_Array.h"
 
 namespace lia {
-const int max_int=2147483640;
+const int64_t max_int=9223372036854775800;
 //one arith lit is in the form of a_1*x_1+...+a_n*x_n+k<=0, the cofficient are divided into positive ones and negative ones, the coff are positive.
 //if neg_coff =1 neg_coff_var=x pos_coff=1 pos_coff_var=y means y-x
 struct lit{
     std::vector<int>            pos_coff_var_idx;
-    std::vector<int>            pos_coff;
+    std::vector<int64_t>        pos_coff;
     std::vector<int>            neg_coff_var_idx;
-    std::vector<int>            neg_coff;
-    int                         key;
+    std::vector<int64_t>        neg_coff;
+    int64_t                     key;
     int                         lits_index;
-    int                         delta;//the current value of left side
+    int64_t                     delta;//the current value of left side
 };
 
 struct variable{
     std::vector<int>            literals;
     std::vector<int>            literal_clause;//literal_clause[i]=c means the ith literal containing the var is in cth clause
-    std::vector<int>            literal_coff;//literal_coff[i] denotes the coff of the var in corresponding literal
+    std::vector<int64_t>            literal_coff;//literal_coff[i] denotes the coff of the var in corresponding literal
     std::vector<uint64_t>       clause_idxs;
     std::string                 var_name;
-    int                         low_bound=-max_int;
-    int                         upper_bound=max_int;
+    int64_t                         low_bound=-max_int;
+    int64_t                         upper_bound=max_int;
 };
 
 struct clause{
@@ -63,8 +63,8 @@ public:
     Array                       *unsat_clauses;
     bool                        use_pbs=false;
     //solution
-    std::vector<int>            _solution;
-    std::vector<int>            _best_solutin;
+    std::vector<int64_t>       _solution;
+    std::vector<int64_t>       _best_solutin;
     int                         best_found_cost;
     int                         best_found_this_restart;
     //control
@@ -75,7 +75,7 @@ public:
     int                          CC_mode;
     std::vector<uint64_t>       last_move;
     std::vector<int>            operation_var_idx_vec;
-    std::vector<int>            operation_change_value_vec;
+    std::vector<int64_t>        operation_change_value_vec;
     std::chrono::steady_clock::time_point start;
     double                      best_cost_time;
     double                      _cutoff;
@@ -115,32 +115,32 @@ public:
     
     //construction
     void                        construct_slution_score();//construct the solution based on score
-    uint64_t                    pick_construct_idx(int &best_value);
-    void                        construct_move(uint64_t var_idx,int change_value);
-    int                         construct_score(uint64_t var_idx,int change_value);
+    uint64_t                    pick_construct_idx(int64_t &best_value);
+    void                        construct_move(uint64_t var_idx,int64_t change_value);
+    int                         construct_score(uint64_t var_idx,int64_t change_value);
     
     //basic operations
     inline void                 sat_a_clause(uint64_t clause_idx){unsat_clauses->delete_element((int)clause_idx);};
     inline void                 unsat_a_clause(uint64_t clause_idx){unsat_clauses->insert_element((int)clause_idx);};
     bool                        update_best_solution();
     void                        modify_CC(uint64_t var_idx,int direction);
-    int                         pick_critical_move(int &best_value);
-    void                        critical_move(uint64_t var_idx,int change_value);
+    int                         pick_critical_move(int64_t &best_value);
+    void                        critical_move(uint64_t var_idx,int64_t change_value);
     void                        invert_lit(lit &l);
-    int                         delta_lit(lit &l);
+    int64_t                     delta_lit(lit &l);
     double                      TimeElapsed();
     void                        clear_prev_data();
-    int                         devide(int a, int b);
-    void                        insert_operation(int var_idx,int change_value,int &operation_idx);
+    int64_t                     devide(int64_t a, int64_t b);
+    void                        insert_operation(int var_idx,int64_t change_value,int &operation_idx);
     //print
     void                        print_formula();
     void                        print_literal(lit &l);
     void                        print_formula_pbs();
     void                        print_lit_pbs(lit &l);
     //calculate score
-    int                         critical_score(uint64_t var_idx,int change_value);
-    int                         critical_subscore(uint64_t var_idx,int change_value);
-    void                        critical_score_subscore(uint64_t var_idx,int change_value);
+    int                         critical_score(uint64_t var_idx,int64_t change_value);
+    int                         critical_subscore(uint64_t var_idx,int64_t change_value);
+    void                        critical_score_subscore(uint64_t var_idx,int64_t change_value);
     //check
     bool                        check_solution();
 

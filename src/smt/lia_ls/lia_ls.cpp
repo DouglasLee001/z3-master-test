@@ -30,7 +30,7 @@ void ls_solver::build_lits(std::string &in_string){
                 if(vec[idx]==")"){break;}
                 if(vec[idx]=="("){
                     idx+=2;
-                    int coff=std::atoi(vec[idx].c_str());
+                    int64_t coff=std::atoi(vec[idx].c_str());
                     if(coff>0){
                         l->pos_coff.push_back(coff);
                         l->pos_coff_var_idx.push_back((int)transfer_name_to_tmp_var(vec[++idx]));
@@ -54,7 +54,7 @@ void ls_solver::build_lits(std::string &in_string){
         else{
             _bound_lits.push_back(lit_index);
             l->lits_index=0;
-            int bound=std::atoi(vec[4].c_str());
+            int64_t bound=std::atoi(vec[4].c_str());
             uint64_t var_idx=transfer_name_to_tmp_var(vec[3]);
             if(vec[2]==">="){_tmp_vars[var_idx].low_bound=std::max(_tmp_vars[var_idx].low_bound,bound);}
             else if(vec[2]=="<="){_tmp_vars[var_idx].upper_bound=std::min(_tmp_vars[var_idx].upper_bound,bound);}
@@ -355,7 +355,8 @@ void ls_solver::smooth_clause_weight(){
 }
 
 void ls_solver::random_walk(){
-    int clause_idx,operation_idx,change_value,var_idx,score,operation_direction;
+    int clause_idx,operation_idx,var_idx,score,operation_direction;
+    int64_t change_value;
     int best_score=INT32_MIN;
     int best_operation_idx=0;
     uint64_t best_last_move=UINT64_MAX;
@@ -371,12 +372,12 @@ void ls_solver::random_walk(){
             l=&(_lits[std::abs(l_idx)]);
             for(int k=0;k<l->pos_coff.size();k++){
                 var_idx=l->pos_coff_var_idx[k];
-                change_value=(l_idx>0)?devide(-l->delta,l->pos_coff[i]):devide(1-l->delta, l->pos_coff[i]);
+                change_value=(l_idx>0)?devide(-l->delta,l->pos_coff[k]):devide(1-l->delta, l->pos_coff[k]);
                 insert_operation(var_idx, change_value, operation_idx);
             }
             for(int k=0;k<l->neg_coff.size();k++){
                 var_idx=l->neg_coff_var_idx[k];
-                change_value=(l_idx>0)?devide(l->delta, l->neg_coff[i]):devide(l->delta-1, l->neg_coff[i]);
+                change_value=(l_idx>0)?devide(l->delta, l->neg_coff[k]):devide(l->delta-1, l->neg_coff[k]);
                 insert_operation(var_idx, change_value, operation_idx);
             }
         }
@@ -410,15 +411,15 @@ void ls_solver::construct_slution_score(){
     }
 }
 
-uint64_t ls_solver::pick_construct_idx(int &best_value){
+uint64_t ls_solver::pick_construct_idx(int64_t &best_value){
     return 0;
 }
 
-void ls_solver::construct_move(uint64_t var_idx, int change_value){
+void ls_solver::construct_move(uint64_t var_idx, int64_t change_value){
     
 }
 
-int ls_solver::construct_score(uint64_t var_idx,int change_value){
+int ls_solver::construct_score(uint64_t var_idx,int64_t change_value){
     return 0;
 }
 
@@ -441,9 +442,9 @@ void ls_solver::modify_CC(uint64_t var_idx, int direction){
     
 }
 
-int ls_solver::pick_critical_move(int &best_value){
-    int best_score,score,best_var_idx,cnt;
-    int operation_var_idx,operation_change_value,change_value;
+int ls_solver::pick_critical_move(int64_t &best_value){
+    int best_score,score,operation_var_idx,best_var_idx,cnt;
+    int64_t operation_change_value,change_value;
     bool BMS=false;
     bool should_push_vec;
     best_score=0;
@@ -522,7 +523,7 @@ int ls_solver::pick_critical_move(int &best_value){
     return -1;
 }
 
-void ls_solver::critical_move(uint64_t var_idx, int change_value){
+void ls_solver::critical_move(uint64_t var_idx, int64_t change_value){
     int direction=(change_value>0)?0:1;
     critical_score_subscore(var_idx, change_value);
     _solution[var_idx]+=change_value;
@@ -535,15 +536,15 @@ void ls_solver::critical_move(uint64_t var_idx, int change_value){
 void ls_solver::invert_lit(lit &l){
     l.key=1-l.key;
     std::vector<int> tmp_coff_var_idx=l.pos_coff_var_idx;
-    std::vector<int> tmp_coff=l.pos_coff;
+    std::vector<int64_t> tmp_coff=l.pos_coff;
     l.pos_coff_var_idx=l.neg_coff_var_idx;
     l.pos_coff=l.neg_coff;
     l.neg_coff_var_idx=tmp_coff_var_idx;
     l.neg_coff=tmp_coff;
 }
 //all coffs are positive, go through all terms of the literal
-int ls_solver::delta_lit(lit &l){
-    int delta=l.key;
+int64_t ls_solver::delta_lit(lit &l){
+    int64_t delta=l.key;
     for(int i=0;i<l.pos_coff.size();i++){delta+=(l.pos_coff[i]*_solution[l.pos_coff_var_idx[i]]);}
     for(int i=0;i<l.neg_coff.size();i++){delta-=(l.neg_coff[i]*_solution[l.neg_coff_var_idx[i]]);}
     return delta;
@@ -559,12 +560,13 @@ void ls_solver::clear_prev_data(){
     
 }
 //return the upper round of (a/b): (-3.5)->-4; (3.5)->4
-int ls_solver::devide(int a, int b){
-    int up_round=std::ceil((double)(std::abs(a))/(double)(b));
+int64_t ls_solver::devide(int64_t a, int64_t b){
+    int64_t up_round=(std::abs(a))/(b);
+    if(std::abs(a)%b>0){up_round++;}
     return a>0?up_round:-up_round;
 }
-void ls_solver::insert_operation(int var_idx,int change_value,int &operation_idx){
-    int future_solution=_solution[var_idx]+change_value;
+void ls_solver::insert_operation(int var_idx,int64_t change_value,int &operation_idx){
+    int64_t future_solution=_solution[var_idx]+change_value;
     if(future_solution>=_vars[var_idx].low_bound&&future_solution<=_vars[var_idx].upper_bound){
         operation_var_idx_vec[operation_idx]=var_idx;
         operation_change_value_vec[operation_idx++]=change_value;
@@ -604,7 +606,7 @@ void ls_solver::print_literal(lit &l){
 }
 
 void ls_solver::print_lit_pbs(lit &l){
-    int degree=l.key;
+    int64_t degree=l.key;
     for(int i=0;i<l.pos_coff.size();i++){degree+=l.pos_coff[i];}
     std::cout<<_num_vars+1<<" "<<degree<<" ";
     for(int i=0;i<l.pos_coff.size();i++)
@@ -614,11 +616,11 @@ void ls_solver::print_lit_pbs(lit &l){
 }
 
 //calculate score
-int ls_solver::critical_score(uint64_t var_idx, int change_value){
+int ls_solver::critical_score(uint64_t var_idx, int64_t change_value){
     lit *l;
     clause *cp;
     int critical_score=0;
-    int delta_old,delta_new,l_clause_idx;
+    int64_t delta_old,delta_new,l_clause_idx;
     //number of make_lits in a clause
     int make_break_in_clause=0;
     variable *var=&(_vars[var_idx]);
@@ -640,15 +642,15 @@ int ls_solver::critical_score(uint64_t var_idx, int change_value){
     return critical_score;
 }
 
-int ls_solver::critical_subscore(uint64_t var_idx, int change_value){
+int ls_solver::critical_subscore(uint64_t var_idx, int64_t change_value){
     return 0;
 }
 //sat or unsat a clause, update the delta
-void ls_solver::critical_score_subscore(uint64_t var_idx, int change_value){
+void ls_solver::critical_score_subscore(uint64_t var_idx, int64_t change_value){
     variable * var=&(_vars[var_idx]);
     lit *l;
     clause *cp;
-    int l_clause_idx,delta_old,curr_clause_idx;
+    int64_t l_clause_idx,delta_old,curr_clause_idx;
     int make_break_in_clause=0;
     for(int i=0;i<var->literals.size();i++){
         l=&(_lits[var->literals[i]]);
@@ -698,7 +700,8 @@ bool ls_solver::check_solution(){
 //local search
 bool ls_solver::local_search(){
     int no_improve_cnt=0;
-    int flipv,change_value;
+    int flipv;
+    int64_t change_value;
     start = std::chrono::steady_clock::now();
     initialize();
     for(_step=1;_step<_max_step;_step++){
