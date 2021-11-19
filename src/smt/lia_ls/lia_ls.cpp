@@ -67,20 +67,26 @@ void ls_solver::build_lits(std::string &in_string){
 }
 
 void ls_solver::build_instance(std::vector<std::vector<int> >& clause_vec){
-    for(auto clause_curr:clause_vec){
-        if(clause_curr.size()==1){
-            lit *l=&(_lits[std::abs(clause_curr[0])]);
+    for(int clause_idx=0;clause_idx<clause_vec.size();clause_idx++){
+        if(clause_vec[clause_idx].size()==1){
+            lit *l=&(_lits[std::abs(clause_vec[clause_idx][0])]);
             if(l->pos_coff.size()==0&&l->neg_coff.size()==1){
-                if(clause_curr[0]>0&&l->key>_tmp_vars[l->neg_coff_var_idx[0]].low_bound){_tmp_vars[l->neg_coff_var_idx[0]].low_bound=l->key;}
-                else if(clause_curr[0]<0&&(l->key-1)<_tmp_vars[l->neg_coff_var_idx[0]].upper_bound){_tmp_vars[l->neg_coff_var_idx[0]].upper_bound=(l->key-1);}
+                if(clause_vec[clause_idx][0]>0&&l->key>_tmp_vars[l->neg_coff_var_idx[0]].low_bound){_tmp_vars[l->neg_coff_var_idx[0]].low_bound=l->key;}
+                else if(clause_vec[clause_idx][0]<0&&(l->key-1)<_tmp_vars[l->neg_coff_var_idx[0]].upper_bound){_tmp_vars[l->neg_coff_var_idx[0]].upper_bound=(l->key-1);}
                 _bound_lits.push_back(l->lits_index);
                 l->lits_index=0;
+                if(clause_vec[clause_idx][0]<0){
+                    clause_vec[clause_idx][0]=-clause_vec[clause_idx][0];
+                }
             }
             else if(l->pos_coff.size()==1&&l->neg_coff.size()==0){
-                if(clause_curr[0]>0&&(-l->key)<_tmp_vars[l->pos_coff_var_idx[0]].upper_bound){_tmp_vars[l->pos_coff_var_idx[0]].upper_bound=-l->key;}
-                else if(clause_curr[0]<0&&(1-l->key)>_tmp_vars[l->pos_coff_var_idx[0]].low_bound){_tmp_vars[l->pos_coff_var_idx[0]].low_bound=(1-l->key);}
+                if(clause_vec[clause_idx][0]>0&&(-l->key)<_tmp_vars[l->pos_coff_var_idx[0]].upper_bound){_tmp_vars[l->pos_coff_var_idx[0]].upper_bound=-l->key;}
+                else if(clause_vec[clause_idx][0]<0&&(1-l->key)>_tmp_vars[l->pos_coff_var_idx[0]].low_bound){_tmp_vars[l->pos_coff_var_idx[0]].low_bound=(1-l->key);}
                 _bound_lits.push_back(l->lits_index);
                 l->lits_index=0;
+                if(clause_vec[clause_idx][0]<0){
+                    clause_vec[clause_idx][0]=-clause_vec[clause_idx][0];
+                }
             }
         }
     }
@@ -190,9 +196,9 @@ void ls_solver::reduce_vars(){
         for(int i=0;i<l->neg_coff.size();i++){occur_time[l->neg_coff_var_idx[i]]++;}
     }
     //calculate the x-y pair
-    for(int pre_idx=0;pre_idx<tmp_vars_size;pre_idx++){
-        if(pair_y->is_in_array(pre_idx)){continue;}//prevent reinsert
-        for(int pos_idx=pre_idx;pos_idx<tmp_vars_size;pos_idx++){
+    for(int pre_idx=0;pre_idx<tmp_vars_size-1;pre_idx++){
+        if(pair_y->is_in_array(pre_idx)||occur_time[pre_idx]==0){continue;}//prevent reinsert
+        for(int pos_idx=pre_idx+1;pos_idx<tmp_vars_size;pos_idx++){
             if(hash_map[pre_idx*tmp_vars_size+pos_idx]==occur_time[pre_idx]){
                 pair_x->insert_element(pre_idx);
                 pair_y->insert_element(pos_idx);
