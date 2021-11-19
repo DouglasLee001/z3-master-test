@@ -3670,8 +3670,8 @@ namespace smt {
             // display_assignment(std::cout);//在搜索开始之前先获取已经单元传播赋值的部分bool变量
             // std::cout<<"clause num:"<<m_ls_solver->_num_clauses<<"\n"<<"bool var num:"<<m_ls_solver->_num_bool_vars<<"\n";
             // m_ls_solver->print_formula();
-             m_lia_ls_solver->print_formula();
 #endif
+            // m_lia_ls_solver->print_formula();
             // m_lia_ls_solver->print_formula_pbs();
             m_lia_ls_solver->local_search();
             std::cout<<"local search best:\n"<<m_lia_ls_solver->best_found_cost<<"\n";

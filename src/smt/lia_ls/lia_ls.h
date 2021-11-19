@@ -32,9 +32,9 @@ struct lit{
 };
 
 struct variable{
-    std::vector<int>            literals;
+    std::vector<int>            literals;//literals[i]=l means the ith literal of the var is the pos(neg) of lth of _lits, it can be negative
     std::vector<int>            literal_clause;//literal_clause[i]=c means the ith literal containing the var is in cth clause
-    std::vector<int64_t>            literal_coff;//literal_coff[i] denotes the coff of the var in corresponding literal
+    std::vector<int64_t>            literal_coff;//literal_coff[i] denotes the coff of the var in corresponding literal, it can be negative
     std::vector<uint64_t>       clause_idxs;
     std::string                 var_name;
     int64_t                         low_bound=-max_int;
@@ -42,7 +42,7 @@ struct variable{
 };
 
 struct clause{
-    std::vector<int>            literals;
+    std::vector<int>            literals;//literals[i]=l means the ith literal of the clause if the pos(neg) of the _lits, it can be negative
     int                          weight=1;
     int                          sat_count;
 };
