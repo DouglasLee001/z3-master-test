@@ -362,7 +362,9 @@ void ls_solver::initialize_clause_datas(){
         cl->sat_count=0;
         cl->weight=1;
         for(int l_idx:cl->literals){
-            if((l_idx>0&&_lits[l_idx].delta<=0)||(l_idx<0&&_lits[l_idx].delta>0)){cl->sat_count++;}
+            int64_t delta=_lits[std::abs(l_idx)].delta;
+            bool is_equal=_lits[std::abs(l_idx)].is_equal;
+            if( (!is_equal&&((delta<=0&&l_idx>0)||(delta>0&&l_idx<0))) || (is_equal&&((delta==0&&l_idx>0)||(delta!=0&&l_idx<0))) ){cl->sat_count++;}
         }
         if(cl->sat_count==0){unsat_a_clause(c);}
         else{sat_a_clause(c);}
@@ -666,8 +668,8 @@ int ls_solver::critical_score(uint64_t var_idx, int64_t change_value){
         l_clause_idx=var->literal_clause[i];
         delta_old=l->delta;
         delta_new=delta_old+(var->literal_coff[i]*change_value);//l_clause_idx means that the coff is positive, and vice versa
-        if(delta_old<=0&&delta_new>0) make_break_in_clause=(var->literals[i]>0)?(make_break_in_clause-1):(make_break_in_clause+1);
-        else if(delta_old>0&&delta_new<=0) make_break_in_clause=(var->literals[i]>0)?(make_break_in_clause+1):(make_break_in_clause-1);
+        if((!l->is_equal&&delta_old<=0&&delta_new>0)||(l->is_equal&&delta_old==0&&delta_new!=0)) make_break_in_clause=(var->literals[i]>0)?(make_break_in_clause-1):(make_break_in_clause+1);
+        else if((!l->is_equal&&delta_old>0&&delta_new<=0)||(l->is_equal&&delta_old!=0&&delta_new==0)) make_break_in_clause=(var->literals[i]>0)?(make_break_in_clause+1):(make_break_in_clause-1);
         //enter a new clause or the last literal
         if( (i!=(var->literals.size()-1)&&l_clause_idx!=var->literal_clause[i+1]) ||i==(var->literals.size()-1)){
             cp=&(_clauses[std::abs(l_clause_idx)]);
@@ -694,8 +696,9 @@ void ls_solver::critical_score_subscore(uint64_t var_idx, int64_t change_value){
         l_clause_idx=var->literal_clause[i];
         delta_old=l->delta;
         l->delta=(l->delta+var->literal_coff[i]*change_value);//update the delta
-        if(delta_old<=0&&l->delta>0){make_break_in_clause=(var->literals[i]>0)?(make_break_in_clause-1):(make_break_in_clause+1);;}
-        else if(delta_old>0&&l->delta<=0){make_break_in_clause=(var->literals[i]>0)?(make_break_in_clause+1):(make_break_in_clause-1);}
+        bool is_equal=l->is_equal;
+        if((!is_equal&&delta_old<=0&&l->delta>0)||(is_equal&&delta_old==0&&l->delta!=0)){make_break_in_clause=(var->literals[i]>0)?(make_break_in_clause-1):(make_break_in_clause+1);;}
+        else if((!is_equal&&delta_old>0&&l->delta<=0)||(is_equal&&delta_old!=0&&l->delta==0)){make_break_in_clause=(var->literals[i]>0)?(make_break_in_clause+1):(make_break_in_clause-1);}
         //enter a new clause or the last literal
         if( (i!=(var->literals.size()-1)&&l_clause_idx!=var->literal_clause[i+1]) ||i==(var->literals.size()-1)){
             curr_clause_idx=std::abs(l_clause_idx);
