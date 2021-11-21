@@ -26,6 +26,11 @@ void ls_solver::build_lits(std::string &in_string){
         if(vec.size()>6){
             l->lits_index=std::atoi(vec[0].c_str());
             int idx=5;
+            if(vec[2]=="="&&vec[3]!="("){
+                idx++;
+                l->key=-std::atoll(vec[3].c_str());
+            }
+            l->is_equal=(vec[2]=="=");
             for(;idx<vec.size();idx++){
                 if(vec[idx]==")"){break;}
                 if(vec[idx]=="("){
@@ -48,7 +53,7 @@ void ls_solver::build_lits(std::string &in_string){
                 _num_opt+=l->pos_coff.size();
                 _num_opt+=l->neg_coff.size();
             }
-            l->key=-std::atoll(vec[++idx].c_str());
+            if(vec[2]!="="||vec[3]=="(") {l->key=-std::atoll(vec[++idx].c_str());}
             if(vec[2]==">="){l->key++;invert_lit(*l);}
         }//( <= ( + x1 ( * -1 x2 ) x7 ( * -1 x8 ) ) 0 )
         else{
@@ -214,6 +219,7 @@ void ls_solver::reduce_vars(){
         if(l->lits_index==0){continue;}
         new_lit.key=l->key;
         new_lit.lits_index=l->lits_index;
+        new_lit.is_equal=l->is_equal;
         for(int i=0;i<l->pos_coff.size();i++){
             original_var_idx=l->pos_coff_var_idx[i];
             original_var=&(_tmp_vars[original_var_idx]);
@@ -247,6 +253,7 @@ void ls_solver::reduce_vars(){
     //set low and upbound
     for(original_var_idx=0;original_var_idx<_tmp_vars.size();original_var_idx++){
         original_var=&(_tmp_vars[original_var_idx]);
+        if(occur_time[original_var_idx]==0){continue;}
         //original var
         if(!pair_x->is_in_array(original_var_idx)&&!pair_y->is_in_array(original_var_idx)){
             new_var=&(_vars[transfer_name_to_var(original_var->var_name)]);
@@ -632,7 +639,7 @@ void ls_solver::print_literal(lit &l){
         {std::cout<<"( "<<l.pos_coff[i]<<" * "<<_vars[l.pos_coff_var_idx[i]].var_name<<" ) + ";}
     for(int i=0;i<l.neg_coff.size();i++)
         {std::cout<<"( -"<<l.neg_coff[i]<<" * "<<_vars[l.neg_coff_var_idx[i]].var_name<<" ) + ";}
-    std::cout<<"( "<<l.key<<" ) <= 0\n";
+    std::cout<<"( "<<l.key<<" ) "<<(l.is_equal?"==":"<=")<<" 0\n";
 }
 
 void ls_solver::print_lit_pbs(lit &l){
@@ -714,7 +721,8 @@ bool ls_solver::check_solution(){
         cp=&(_clauses[i]);
         for(int i: cp->literals){
             int64_t delta=delta_lit(_lits[std::abs(i)]);
-            if((delta<=0&&i>0)||(delta>0&&i<0)){
+            bool is_equal=_lits[std::abs(i)].is_equal;
+            if( (!is_equal&&((delta<=0&&i>0)||(delta>0&&i<0))) || (is_equal&&((delta==0&&i>0)||(delta!=0&&i<0))) ){
                 unsat_flag=true;//the clause is already sat
                 break;
             }

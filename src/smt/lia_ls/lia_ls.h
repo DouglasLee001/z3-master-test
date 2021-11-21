@@ -29,6 +29,7 @@ struct lit{
     int64_t                     key;
     int                         lits_index;
     int64_t                     delta;//the current value of left side
+    bool                        is_equal=false;//true means a-b-k==0, else a-b-k<=0
 };
 
 struct variable{
