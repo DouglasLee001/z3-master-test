@@ -206,7 +206,7 @@ void ls_solver::reduce_vars(){
     for(int pre_idx=0;pre_idx<tmp_vars_size-1;pre_idx++){
         if(pair_y->is_in_array(pre_idx)||occur_time[pre_idx]==0){continue;}//prevent reinsert
         for(int pos_idx=pre_idx+1;pos_idx<tmp_vars_size;pos_idx++){
-            if(hash_map[pre_idx*tmp_vars_size+pos_idx]==occur_time[pre_idx]){
+            if(hash_map[pre_idx*tmp_vars_size+pos_idx]==occur_time[pre_idx]&&occur_time[pre_idx]==occur_time[pos_idx]){
                 pair_x->insert_element(pre_idx);
                 pair_y->insert_element(pos_idx);
                 break;
