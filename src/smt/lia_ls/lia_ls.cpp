@@ -409,6 +409,31 @@ void ls_solver::random_walk(){
         cp=&(_clauses[clause_idx]);
         for(int l_idx:cp->literals){
             l=&(_lits[std::abs(l_idx)]);
+            if(l->is_equal){
+                if(l_idx<0){
+                    for(int var_idx:l->pos_coff_var_idx){
+                        insert_operation(var_idx, 1, operation_idx);
+                        insert_operation(var_idx, -1, operation_idx);
+                    }
+                    for(int var_idx:l->neg_coff_var_idx){
+                        insert_operation(var_idx, 1, operation_idx);
+                        insert_operation(var_idx, -1, operation_idx);
+                    }
+                }//delta should not be 0, while it is 0, so the var should increase 1/-1
+                else{
+                    for(int j=0;j<l->pos_coff.size();j++){
+                        int var_idx=l->pos_coff_var_idx[j];
+                        if((l->delta%l->pos_coff[j])!=0){continue;}
+                        insert_operation(var_idx, (-l->delta/l->pos_coff[j]), operation_idx);
+                    }
+                    for(int j=0;j<l->neg_coff.size();j++){
+                        int var_idx=l->neg_coff_var_idx[j];
+                        if((l->delta%l->neg_coff[j])!=0){continue;}
+                        insert_operation(var_idx, (l->delta/l->neg_coff[j]), operation_idx);
+                    }
+                }//delta should be 0, while it is not 0, so the var should increase (-delta/coff), while (-delta%coff)==0
+                continue;
+            }
             for(int k=0;k<l->pos_coff.size();k++){
                 var_idx=l->pos_coff_var_idx[k];
                 change_value=(l_idx>0)?devide(-l->delta,l->pos_coff[k]):devide(1-l->delta, l->pos_coff[k]);
@@ -496,6 +521,31 @@ int ls_solver::pick_critical_move(int64_t &best_value){
         clause *cl=&(_clauses[unsat_clauses->element_at(i)]);
         for(int l_idx:cl->literals){
             lit *l=&(_lits[std::abs(l_idx)]);
+            if(l->is_equal){
+                if(l_idx<0){
+                    for(int var_idx:l->pos_coff_var_idx){
+                        if(_step>tabulist[2*var_idx]){insert_operation(var_idx, 1, operation_idx);}
+                        if(_step>tabulist[2*var_idx+1]){insert_operation(var_idx, -1, operation_idx);}
+                    }
+                    for(int var_idx:l->neg_coff_var_idx){
+                        if(_step>tabulist[2*var_idx]){insert_operation(var_idx, 1, operation_idx);}
+                        if(_step>tabulist[2*var_idx+1]){insert_operation(var_idx, -1, operation_idx);}
+                    }
+                }//delta should not be 0, while it is 0, so the var should increase 1/-1
+                else{
+                    for(int j=0;j<l->pos_coff.size();j++){
+                        int var_idx=l->pos_coff_var_idx[j];
+                        if((l->delta%l->pos_coff[j])!=0){continue;}
+                        if((l->delta<0&&_step>tabulist[2*var_idx])||(l->delta>0&&_step>tabulist[2*var_idx+1])){insert_operation(var_idx, (-l->delta/l->pos_coff[j]), operation_idx);}
+                    }
+                    for(int j=0;j<l->neg_coff.size();j++){
+                        int var_idx=l->neg_coff_var_idx[j];
+                        if((l->delta%l->neg_coff[j])!=0){continue;}
+                        if((l->delta>0&&_step>tabulist[2*var_idx])||(l->delta<0&&_step>tabulist[2*var_idx+1])){insert_operation(var_idx, (l->delta/l->neg_coff[j]), operation_idx);}
+                    }
+                }//delta should be 0, while it is not 0, so the var should increase (-delta/coff), while (-delta%coff)==0
+                continue;
+            }
             for(int i=0;i<l->pos_coff.size();i++){
                 should_push_vec=false;
                 int var_idx=l->pos_coff_var_idx[i];
