@@ -61,7 +61,8 @@ void ls_solver::build_lits(std::string &in_string){
             int64_t bound=std::atoll(vec[4].c_str());
             uint64_t var_idx=transfer_name_to_tmp_var(vec[3]);
             if(vec[2]==">="){l->key=bound;l->neg_coff.push_back(1);l->neg_coff_var_idx.push_back((int)var_idx);}
-            else if(vec[2]=="<="){l->key=-bound;l->pos_coff.push_back(1);l->pos_coff_var_idx.push_back((int)var_idx);}
+            else{l->key=-bound;l->pos_coff.push_back(1);l->pos_coff_var_idx.push_back((int)var_idx);}
+            l->is_equal=(vec[2]=="=");
         }//( >= x 0 )
         
     }//lia lit
@@ -75,6 +76,7 @@ void ls_solver::build_instance(std::vector<std::vector<int> >& clause_vec){
     for(int clause_idx=0;clause_idx<clause_vec.size();clause_idx++){
         if(clause_vec[clause_idx].size()==1){
             lit *l=&(_lits[std::abs(clause_vec[clause_idx][0])]);
+            if(l->is_equal){continue;}//equal lit is not bound lit
             if(l->pos_coff.size()==0&&l->neg_coff.size()==1){
                 if(clause_vec[clause_idx][0]>0&&l->key>_tmp_vars[l->neg_coff_var_idx[0]].low_bound){_tmp_vars[l->neg_coff_var_idx[0]].low_bound=l->key;}
                 else if(clause_vec[clause_idx][0]<0&&(l->key-1)<_tmp_vars[l->neg_coff_var_idx[0]].upper_bound){_tmp_vars[l->neg_coff_var_idx[0]].upper_bound=(l->key-1);}
