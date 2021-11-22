@@ -282,6 +282,7 @@ void ls_solver::reduce_vars(){
     int num_var_with_bound=0;
     for(int var_idx=0;var_idx<_vars.size();var_idx++){
         new_var=&(_vars[var_idx]);
+        if(new_var->upper_bound!=max_int&&new_var->low_bound!=-max_int){continue;}//if a var has both upper bound and lower bound, no bound lits is added.
         if(new_var->low_bound!=-max_int){
             int lit_idx=_bound_lits[num_var_with_bound++];
             lit bound_lit;
@@ -784,6 +785,7 @@ bool ls_solver::check_solution(){
         }
         if(!unsat_flag){unsat_num++;}
     }
+    for(int var_idx=0;var_idx<_vars.size();var_idx++){if(_solution[var_idx]>_vars[var_idx].upper_bound||_solution[var_idx]<_vars[var_idx].low_bound){std::cout<<"var "<<var_idx<<" out of range\n";}}
     if(unsat_num==unsat_clauses->size())
         std::cout<<"right solution\n";
     else
