@@ -514,7 +514,7 @@ int ls_solver::pick_critical_move(int64_t &best_value){
     int64_t operation_change_value,change_value;
     bool BMS=false;
     bool should_push_vec;
-    best_score=0;
+    best_score=1;
     best_var_idx=-1;
     change_value=0;
     uint64_t best_last_move=UINT64_MAX;
