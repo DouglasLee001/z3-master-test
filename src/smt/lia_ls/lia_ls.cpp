@@ -739,19 +739,20 @@ int ls_solver::critical_subscore(uint64_t var_idx, int64_t change_value){
 }
 //sat or unsat a clause, update the delta
 void ls_solver::critical_score_subscore(uint64_t var_idx, int64_t change_value){
+    static std::vector<int> lit_exist(_num_lits+_additional_len,0);
     variable * var=&(_vars[var_idx]);
     lit *l;
     clause *cp;
-    int64_t l_clause_idx,delta_old,curr_clause_idx;
+    int64_t l_clause_idx,delta_old,delta_new,curr_clause_idx;
     int make_break_in_clause=0;
     for(int i=0;i<var->literals.size();i++){
         l=&(_lits[std::abs(var->literals[i])]);
         l_clause_idx=var->literal_clause[i];
         delta_old=l->delta;
-        l->delta=(l->delta+var->literal_coff[i]*change_value);//update the delta
+        delta_new=(l->delta+var->literal_coff[i]*change_value);
         bool is_equal=l->is_equal;
-        if((!is_equal&&delta_old<=0&&l->delta>0)||(is_equal&&delta_old==0&&l->delta!=0)){make_break_in_clause=(var->literals[i]>0)?(make_break_in_clause-1):(make_break_in_clause+1);;}
-        else if((!is_equal&&delta_old>0&&l->delta<=0)||(is_equal&&delta_old!=0&&l->delta==0)){make_break_in_clause=(var->literals[i]>0)?(make_break_in_clause+1):(make_break_in_clause-1);}
+        if((!is_equal&&delta_old<=0&&delta_new>0)||(is_equal&&delta_old==0&&delta_new!=0)){make_break_in_clause=(var->literals[i]>0)?(make_break_in_clause-1):(make_break_in_clause+1);}
+        else if((!is_equal&&delta_old>0&&delta_new<=0)||(is_equal&&delta_old!=0&&delta_new==0)){make_break_in_clause=(var->literals[i]>0)?(make_break_in_clause+1):(make_break_in_clause-1);}
         //enter a new clause or the last literal
         if( (i!=(var->literals.size()-1)&&l_clause_idx!=var->literal_clause[i+1]) ||i==(var->literals.size()-1)){
             curr_clause_idx=std::abs(l_clause_idx);
@@ -766,6 +767,19 @@ void ls_solver::critical_score_subscore(uint64_t var_idx, int64_t change_value){
             make_break_in_clause=0;
         }
     }
+    int lit_idx;
+    for(int i=0;i<var->literals.size();i++){
+        lit_idx=std::abs(var->literals[i]);
+        if(lit_exist[lit_idx]==0){
+            l=&(_lits[lit_idx]);
+            l->delta+=(var->literal_coff[i]*change_value);
+            lit_exist[lit_idx]=1;
+        }
+    }
+    for(int i=0;i<var->literals.size();i++){
+        lit_idx=std::abs(var->literals[i]);
+        lit_exist[lit_idx]=0;
+    }
 }
 
 //check
@@ -773,17 +787,15 @@ bool ls_solver::check_solution(){
     clause *cp;
     int unsat_num=0;
     for(uint64_t i=0;i<_num_clauses;i++){
-        bool unsat_flag=false;//false means the clause is unsat
+        int sat_count=0;
         cp=&(_clauses[i]);
-        for(int i: cp->literals){
-            int64_t delta=delta_lit(_lits[std::abs(i)]);
-            bool is_equal=_lits[std::abs(i)].is_equal;
-            if( (!is_equal&&((delta<=0&&i>0)||(delta>0&&i<0))) || (is_equal&&((delta==0&&i>0)||(delta!=0&&i<0))) ){
-                unsat_flag=true;//the clause is already sat
-                break;
-            }
+        for(int lit_idx: cp->literals){
+            int64_t delta=delta_lit(_lits[std::abs(lit_idx)]);
+            bool is_equal=_lits[std::abs(lit_idx)].is_equal;
+            if( (!is_equal&&((delta<=0&&lit_idx>0)||(delta>0&&lit_idx<0))) || (is_equal&&((delta==0&&lit_idx>0)||(delta!=0&&lit_idx<0))) ){sat_count++;}
         }
-        if(!unsat_flag){unsat_num++;}
+        if(sat_count!=cp->sat_count){std::cout<<"sat count wrong at clause "<<i<<"\n";}
+        if(sat_count==0){unsat_num++;}
     }
     for(int var_idx=0;var_idx<_vars.size();var_idx++){if(_solution[var_idx]>_vars[var_idx].upper_bound||_solution[var_idx]<_vars[var_idx].low_bound){std::cout<<"var "<<var_idx<<" out of range\n";}}
     if(unsat_num==unsat_clauses->size())
