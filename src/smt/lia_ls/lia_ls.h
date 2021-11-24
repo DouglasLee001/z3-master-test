@@ -62,6 +62,7 @@ public:
     std::vector<int>            _bound_lits;//record the index of bounded lits
     std::vector<clause>         _clauses;
     Array                       *unsat_clauses;
+    Array                       *sat_clause_with_false_literal;//clauses with 0<sat_num<literal_num, from which swap operation are choosen
     bool                        use_pbs=false;
     //solution
     std::vector<int64_t>       _solution;
@@ -133,6 +134,7 @@ public:
     void                        clear_prev_data();
     int64_t                     devide(int64_t a, int64_t b);
     void                        insert_operation(int var_idx,int64_t change_value,int &operation_idx);
+    void                        add_swap_operation(int &operation_idx);
     //print
     void                        print_formula();
     void                        print_literal(lit &l);

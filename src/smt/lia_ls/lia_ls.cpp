@@ -337,6 +337,7 @@ void ls_solver::make_space(){
     operation_change_value_vec.resize(_num_opt+_additional_len);
     last_move.resize(2*_num_vars+_additional_len,0);
     unsat_clauses=new Array((int)_num_clauses+(int)_additional_len);
+    sat_clause_with_false_literal=new Array((int)_num_clauses+(int)_additional_len);
 }
 
 void ls_solver::initialize(){
@@ -371,6 +372,7 @@ void ls_solver::initialize_clause_datas(){
         }
         if(cl->sat_count==0){unsat_a_clause(c);}
         else{sat_a_clause(c);}
+        if(cl->sat_count>0&&cl->sat_count<cl->literals.size()){sat_clause_with_false_literal->insert_element((int)c);}
     }
     total_clause_weight=_num_clauses;
 }
@@ -606,8 +608,26 @@ int ls_solver::pick_critical_move(int64_t &best_value){
     }
     //if there is untabu decreasing move
     if(best_var_idx!=-1){return best_var_idx;}
-    //TODO::choose from swap operations if there is no decreasing unsat critical
-    
+    //choose from swap operations if there is no decreasing unsat critical
+    if(!sat_clause_with_false_literal->empty()){
+        best_score=0;
+        operation_idx=0;
+        for(int i=0;operation_idx<100&&i<45;i++){add_swap_operation(operation_idx);}
+        for(int i=0;i<operation_idx;i++){
+            operation_change_value=operation_change_value_vec[i];
+            operation_var_idx=operation_var_idx_vec[i];
+            score=critical_score(operation_var_idx,operation_change_value);
+            int opposite_direction=(operation_change_value>0)?1:0;
+            uint64_t last_move_step=last_move[2*operation_var_idx+opposite_direction];
+            if(score>best_score||(score==best_score&&last_move_step<best_last_move)){
+                best_score=score;
+                best_var_idx=operation_var_idx;
+                best_value=operation_change_value;
+                best_last_move=last_move_step;
+            }
+        }
+        if(best_var_idx!=-1){return best_var_idx;}
+    }
     //update weight and random walk
     if(mt()%10000>smooth_probability){update_clause_weight();}
     else {smooth_clause_weight();}
@@ -665,6 +685,41 @@ void ls_solver::insert_operation(int var_idx,int64_t change_value,int &operation
     }
 }
 
+void ls_solver::add_swap_operation(int &operation_idx){
+    int clause_idx=sat_clause_with_false_literal->element_at(mt()%sat_clause_with_false_literal->size());
+    clause *cl=&(_clauses[clause_idx]);
+    lit *l;
+    int var_idx;
+    int64_t change_value=0;
+    for(int l_idx:cl->literals){
+        l=&(_lits[std::abs(l_idx)]);
+        if((l->delta>0&&l_idx>0)||(l->delta<=0&&l_idx<0)){//determine a false literal
+            for(int i=0;i<l->pos_coff.size();i++){
+                var_idx=l->pos_coff_var_idx[i];
+                if(l_idx>0&&_step>tabulist[2*var_idx+1]){
+                    change_value=devide(-l->delta,l->pos_coff[i]);
+                    insert_operation(var_idx, change_value, operation_idx);
+                }//delta should <=0, while it is now >0, it should enlarge by (-delta/coff) neg
+                else if(l_idx<0&&_step>tabulist[2*var_idx]){
+                    change_value=devide(1-l->delta, l->pos_coff[i]);
+                    insert_operation(var_idx, change_value, operation_idx);
+                }//delta should >=1, while it is now <=0, it should enlarge by (1-delta/coff) pos
+                
+            }
+            for(int i=0;i<l->neg_coff.size();i++){
+                var_idx=l->neg_coff_var_idx[i];
+                if(l_idx>0&&_step>tabulist[2*var_idx]){
+                    change_value=devide(l->delta, l->neg_coff[i]);
+                    insert_operation(var_idx, change_value, operation_idx);
+                }//delta should <=0, while it is now >0, it should enlarge by (-delta/-coff) pos
+                else if(l_idx<0&&_step>tabulist[2*var_idx+1]){
+                    change_value=devide(l->delta-1, l->neg_coff[i]);
+                    insert_operation(var_idx, change_value, operation_idx);
+                }//delta should >=1, while it is now <=0, it should enlarge by (1-delta/-coff) neg
+            }
+        }
+    }
+}
 //print
 void ls_solver::print_formula(){
     for(int i=0;i<_num_clauses;i++){
@@ -765,6 +820,8 @@ void ls_solver::critical_score_subscore(uint64_t var_idx, int64_t change_value){
             }
             cp->sat_count+=make_break_in_clause;
             make_break_in_clause=0;
+            if(cp->sat_count>0&&cp->sat_count<cp->literals.size()){sat_clause_with_false_literal->insert_element((int)curr_clause_idx);}
+            else{sat_clause_with_false_literal->delete_element((int)curr_clause_idx);}
         }
     }
     int lit_idx;
