@@ -696,26 +696,15 @@ void ls_solver::add_swap_operation(int &operation_idx){
         if((l->delta>0&&l_idx>0)||(l->delta<=0&&l_idx<0)){//determine a false literal
             for(int i=0;i<l->pos_coff.size();i++){
                 var_idx=l->pos_coff_var_idx[i];
-                if(l_idx>0&&_step>tabulist[2*var_idx+1]){
-                    change_value=devide(-l->delta,l->pos_coff[i]);
-                    insert_operation(var_idx, change_value, operation_idx);
-                }//delta should <=0, while it is now >0, it should enlarge by (-delta/coff) neg
-                else if(l_idx<0&&_step>tabulist[2*var_idx]){
-                    change_value=devide(1-l->delta, l->pos_coff[i]);
-                    insert_operation(var_idx, change_value, operation_idx);
-                }//delta should >=1, while it is now <=0, it should enlarge by (1-delta/coff) pos
-                
+                if(l_idx>0){change_value=devide(-l->delta,l->pos_coff[i]);}//delta should <=0, while it is now >0, it should enlarge by (-delta/coff) neg
+                else{change_value=devide(1-l->delta, l->pos_coff[i]);}//delta should >=1, while it is now <=0, it should enlarge by (1-delta/coff) pos
+                insert_operation(var_idx, change_value, operation_idx);//do not consider tabu here
             }
             for(int i=0;i<l->neg_coff.size();i++){
                 var_idx=l->neg_coff_var_idx[i];
-                if(l_idx>0&&_step>tabulist[2*var_idx]){
-                    change_value=devide(l->delta, l->neg_coff[i]);
-                    insert_operation(var_idx, change_value, operation_idx);
-                }//delta should <=0, while it is now >0, it should enlarge by (-delta/-coff) pos
-                else if(l_idx<0&&_step>tabulist[2*var_idx+1]){
-                    change_value=devide(l->delta-1, l->neg_coff[i]);
-                    insert_operation(var_idx, change_value, operation_idx);
-                }//delta should >=1, while it is now <=0, it should enlarge by (1-delta/-coff) neg
+                if(l_idx>0){change_value=devide(l->delta, l->neg_coff[i]);}//delta should <=0, while it is now >0, it should enlarge by (-delta/-coff) pos
+                else{change_value=devide(l->delta-1, l->neg_coff[i]);}//delta should >=1, while it is now <=0, it should enlarge by (1-delta/-coff) neg
+                insert_operation(var_idx, change_value, operation_idx);
             }
         }
     }
