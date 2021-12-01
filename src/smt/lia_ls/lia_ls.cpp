@@ -136,6 +136,22 @@ void ls_solver::build_instance(std::vector<std::vector<int> >& clause_vec){
     _num_vars=_vars.size();
     best_found_cost=(int)_num_clauses;
     make_space();
+    int64_t max_lit_num=0;
+    for(int var_idx=0;var_idx<_num_vars;var_idx++){
+        if(_vars[var_idx].literals.size()>max_lit_num){
+            lia_var_idx_with_most_lits=var_idx;
+            max_lit_num=_vars[var_idx].literals.size();
+        }
+    }
+    for(int lit_idx=0;lit_idx<_lits.size();lit_idx++){
+        lit *l=&(_lits[lit_idx]);
+        if(l->lits_index==0){continue;}
+        if(l->pos_coff.size()!=1||l->neg_coff.size()!=1||l->pos_coff[0]!=1||l->neg_coff[0]!=1){
+            lia_var_idx_with_most_lits=-1;
+            is_idl=false;
+            break;
+        }//var_with most lit are dedicated for IDL
+    }
 }
 
 uint64_t ls_solver::transfer_name_to_var(std::string & name){
@@ -338,6 +354,7 @@ void ls_solver::make_space(){
     last_move.resize(2*_num_vars+_additional_len,0);
     unsat_clauses=new Array((int)_num_clauses+(int)_additional_len);
     sat_clause_with_false_literal=new Array((int)_num_clauses+(int)_additional_len);
+    lit_occur=new Array((int)_num_lits);
 }
 
 void ls_solver::initialize(){
@@ -361,18 +378,26 @@ void ls_solver::initialize_lit_datas(){
 }
 //set the sat num of each clause, and sat/unsat a clause
 void ls_solver::initialize_clause_datas(){
+    int64_t pos_delta;
     for(uint64_t c=0;c<_num_clauses;c++){
         clause *cl=&(_clauses[c]);
         cl->sat_count=0;
         cl->weight=1;
+        cl->min_delta=INT64_MAX;
         for(int l_idx:cl->literals){
             int64_t delta=_lits[std::abs(l_idx)].delta;
             bool is_equal=_lits[std::abs(l_idx)].is_equal;
             if( (!is_equal&&((delta<=0&&l_idx>0)||(delta>0&&l_idx<0))) || (is_equal&&((delta==0&&l_idx>0)||(delta!=0&&l_idx<0))) ){cl->sat_count++;}
+            pos_delta=delta;
+            convert_to_pos_delta(pos_delta, l_idx);
+            if(pos_delta<cl->min_delta){
+                cl->min_delta=pos_delta;
+                cl->min_delta_lit_index=l_idx;
+            }
         }
         if(cl->sat_count==0){unsat_a_clause(c);}
         else{sat_a_clause(c);}
-        if(cl->sat_count>0&&cl->sat_count<cl->literals.size()){sat_clause_with_false_literal->insert_element((int)c);}
+        if(cl->sat_count==1){sat_clause_with_false_literal->insert_element((int)c);}
     }
     total_clause_weight=_num_clauses;
 }
@@ -399,9 +424,10 @@ void ls_solver::smooth_clause_weight(){
 }
 
 void ls_solver::random_walk(){
-    int clause_idx,operation_idx,var_idx,score,operation_direction;
+    int clause_idx,operation_idx,var_idx,operation_direction;
     int64_t change_value;
-    int best_score=INT32_MIN;
+    int64_t best_subscore=INT64_MAX;
+    int64_t subscore;
     int best_operation_idx=0;
     uint64_t best_last_move=UINT64_MAX;
     uint64_t last_move_step;
@@ -455,11 +481,11 @@ void ls_solver::random_walk(){
     for(int i=0;i<operation_idx;i++){
         var_idx=operation_var_idx_vec[i];
         change_value=operation_change_value_vec[i];
-        score=critical_score(var_idx, change_value);
+        subscore=critical_subscore(var_idx, change_value);
         operation_direction=(change_value>0)?0:1;
         last_move_step=last_move[2*var_idx+(operation_direction+1)%2];
-        if(score>best_score||(score==best_score&&last_move_step<best_last_move)){
-            best_score=score;
+        if(subscore<best_subscore||(subscore==best_subscore&&last_move_step<best_last_move)){
+            best_subscore=subscore;
             best_last_move=last_move_step;
             best_operation_idx=i;
         }
@@ -516,7 +542,7 @@ int ls_solver::pick_critical_move(int64_t &best_value){
     int64_t operation_change_value,change_value;
     bool BMS=false;
     bool should_push_vec;
-    best_score=1;
+    best_score=(is_idl)?0:1;
     best_var_idx=-1;
     change_value=0;
     uint64_t best_last_move=UINT64_MAX;
@@ -551,23 +577,10 @@ int ls_solver::pick_critical_move(int64_t &best_value){
                 }//delta should be 0, while it is not 0, so the var should increase (-delta/coff), while (-delta%coff)==0
                 continue;
             }
-            for(int i=0;i<l->pos_coff.size();i++){
-                should_push_vec=false;
-                int var_idx=l->pos_coff_var_idx[i];
-                if(l_idx>0&&_step>tabulist[2*var_idx+1]){
-                    should_push_vec=true;
-                    change_value=devide(-l->delta,l->pos_coff[i]);
-                }
-                else if(l_idx<0&&_step>tabulist[2*var_idx]){
-                    should_push_vec=true;
-                    change_value=devide(1-l->delta, l->pos_coff[i]);
-                }
-                if(should_push_vec){insert_operation(var_idx, change_value, operation_idx);}
-                //if l_idx>0, delta should be <=0, while it is now >0(too large), so the var should enlarge by (-delta/coff) (this is a negative value), if l_idx<0, delta should be >=1, while it is now <1(too small), so the var should enlarge by (1-delta)/coff (positive value)
-            }
             for(int i=0;i<l->neg_coff.size();i++){
                 should_push_vec=false;
                 int var_idx=l->neg_coff_var_idx[i];
+                if(var_idx==lia_var_idx_with_most_lits){continue;}
                 if(l_idx>0&&_step>tabulist[2*var_idx]){
                     should_push_vec=true;
                     change_value=devide(l->delta, l->neg_coff[i]);
@@ -578,6 +591,21 @@ int ls_solver::pick_critical_move(int64_t &best_value){
                 }
                 if(should_push_vec){insert_operation(var_idx, change_value, operation_idx);}
                 //if l_idx>0, delta should be <=0, while it is now >0(too large), so the var should enlarge by (delta/coff) (this is a positive value since the coff is neg), if l_idx<0, the delta should be >=1, while it is now <1(too small), so the var should enlarge by (delta-1)/coff (neg value)
+            }
+            for(int i=0;i<l->pos_coff.size();i++){
+                should_push_vec=false;
+                int var_idx=l->pos_coff_var_idx[i];
+                if(var_idx==lia_var_idx_with_most_lits){continue;}
+                if(l_idx>0&&_step>tabulist[2*var_idx+1]){
+                    should_push_vec=true;
+                    change_value=devide(-l->delta,l->pos_coff[i]);
+                }
+                else if(l_idx<0&&_step>tabulist[2*var_idx]){
+                    should_push_vec=true;
+                    change_value=devide(1-l->delta, l->pos_coff[i]);
+                }
+                if(should_push_vec){insert_operation(var_idx, change_value, operation_idx);}
+                //if l_idx>0, delta should be <=0, while it is now >0(too large), so the var should enlarge by (-delta/coff) (this is a negative value), if l_idx<0, delta should be >=1, while it is now <1(too small), so the var should enlarge by (1-delta)/coff (positive value)
             }
         }
     }
@@ -609,10 +637,10 @@ int ls_solver::pick_critical_move(int64_t &best_value){
     //if there is untabu decreasing move
     if(best_var_idx!=-1){return best_var_idx;}
     //choose from swap operations if there is no decreasing unsat critical
-    if(!sat_clause_with_false_literal->empty()){
+    if(!sat_clause_with_false_literal->empty()&&is_idl){
         best_score=0;
         operation_idx=0;
-        for(int i=0;operation_idx<100&&i<45;i++){add_swap_operation(operation_idx);}
+        for(int i=0;operation_idx<45&&i<100;i++){add_swap_operation(operation_idx);}
         for(int i=0;i<operation_idx;i++){
             operation_change_value=operation_change_value_vec[i];
             operation_var_idx=operation_var_idx_vec[i];
@@ -694,17 +722,17 @@ void ls_solver::add_swap_operation(int &operation_idx){
     for(int l_idx:cl->literals){
         l=&(_lits[std::abs(l_idx)]);
         if((l->delta>0&&l_idx>0)||(l->delta<=0&&l_idx<0)){//determine a false literal
-            for(int i=0;i<l->pos_coff.size();i++){
-                var_idx=l->pos_coff_var_idx[i];
-                if(l_idx>0){change_value=devide(-l->delta,l->pos_coff[i]);}//delta should <=0, while it is now >0, it should enlarge by (-delta/coff) neg
-                else{change_value=devide(1-l->delta, l->pos_coff[i]);}//delta should >=1, while it is now <=0, it should enlarge by (1-delta/coff) pos
-                insert_operation(var_idx, change_value, operation_idx);//do not consider tabu here
-            }
             for(int i=0;i<l->neg_coff.size();i++){
                 var_idx=l->neg_coff_var_idx[i];
                 if(l_idx>0){change_value=devide(l->delta, l->neg_coff[i]);}//delta should <=0, while it is now >0, it should enlarge by (-delta/-coff) pos
                 else{change_value=devide(l->delta-1, l->neg_coff[i]);}//delta should >=1, while it is now <=0, it should enlarge by (1-delta/-coff) neg
                 insert_operation(var_idx, change_value, operation_idx);
+            }
+            for(int i=0;i<l->pos_coff.size();i++){
+                var_idx=l->pos_coff_var_idx[i];
+                if(l_idx>0){change_value=devide(-l->delta,l->pos_coff[i]);}//delta should <=0, while it is now >0, it should enlarge by (-delta/coff) neg
+                else{change_value=devide(1-l->delta, l->pos_coff[i]);}//delta should >=1, while it is now <=0, it should enlarge by (1-delta/coff) pos
+                insert_operation(var_idx, change_value, operation_idx);//do not consider tabu here
             }
         }
     }
@@ -778,9 +806,44 @@ int ls_solver::critical_score(uint64_t var_idx, int64_t change_value){
     return critical_score;
 }
 
-int ls_solver::critical_subscore(uint64_t var_idx, int64_t change_value){
-    return 0;
-}
+int64_t ls_solver::critical_subscore(uint64_t var_idx, int64_t change_value){
+    int64_t critical_subscore=0;
+    int64_t delta_old,delta_new;
+    variable *var=&(_vars[var_idx]);
+    int lit_idx,l_clause_idx;
+    //the future min delta containing var
+    int64_t new_future_min_delta=INT64_MAX;
+    bool contained_in_min_delta_lit=false;//determing if the var appears in the lit with min delta
+    lit_occur->clear();
+    for(int i=0;i<var->literals.size();i++){
+        lit_idx=var->literals[i];
+        l_clause_idx=var->literal_clause[i];
+        lit_occur->insert_element(lit_idx);
+        if(lit_idx==_clauses[l_clause_idx].min_delta_lit_index){contained_in_min_delta_lit=true;}
+        delta_new=_lits[std::abs(lit_idx)].delta+(change_value*var->literal_coff[i]);
+        convert_to_pos_delta(delta_new, lit_idx);
+        if(delta_new<new_future_min_delta){new_future_min_delta=delta_new;}
+        //enter a new clause or the last literal
+        if((i!=(var->literals.size()-1)&&l_clause_idx!=var->literal_clause[i+1])||i==(var->literals.size()-1)){
+            clause *cp=&(_clauses[l_clause_idx]);
+            if(new_future_min_delta<=cp->min_delta){critical_subscore+=(new_future_min_delta-cp->min_delta)*cp->weight;}
+            else if(contained_in_min_delta_lit){
+                for(int lit_idx_in_cp:cp->literals){
+                    if(!lit_occur->is_in_array(lit_idx_in_cp)){
+                        delta_old=_lits[std::abs(lit_idx_in_cp)].delta;
+                        convert_to_pos_delta(delta_old, lit_idx_in_cp);
+                        if(delta_old<new_future_min_delta){new_future_min_delta=delta_old;}
+                    }
+                }
+                critical_subscore+=(new_future_min_delta-cp->min_delta)*cp->weight;
+            }//if new_future_min_delta>cp->min_delta and var_idx belongs to the min_delta_lit
+            new_future_min_delta=INT64_MAX;
+            contained_in_min_delta_lit=false;
+            lit_occur->clear();
+        }
+    }
+    return critical_subscore;
+    }
 //sat or unsat a clause, update the delta
 void ls_solver::critical_score_subscore(uint64_t var_idx, int64_t change_value){
     static std::vector<int> lit_exist(_num_lits+_additional_len,0);
@@ -788,12 +851,26 @@ void ls_solver::critical_score_subscore(uint64_t var_idx, int64_t change_value){
     lit *l;
     clause *cp;
     int64_t l_clause_idx,delta_old,delta_new,curr_clause_idx;
+    int64_t pos_delta;
+    int64_t new_future_min_delta=INT64_MAX;
+    int min_delta_lit_idx=-1;
+    bool contained_in_min_delta_lit=false;
+    int lit_idx;
+    lit_occur->clear();
     int make_break_in_clause=0;
     for(int i=0;i<var->literals.size();i++){
-        l=&(_lits[std::abs(var->literals[i])]);
+        lit_idx=var->literals[i];
+        l=&(_lits[std::abs(lit_idx)]);
         l_clause_idx=var->literal_clause[i];
         delta_old=l->delta;
-        delta_new=(l->delta+var->literal_coff[i]*change_value);
+        pos_delta=delta_new=(l->delta+var->literal_coff[i]*change_value);
+        convert_to_pos_delta(pos_delta, lit_idx);
+        if(pos_delta<new_future_min_delta){
+            new_future_min_delta=pos_delta;
+            min_delta_lit_idx=lit_idx;
+        }
+        lit_occur->insert_element(lit_idx);
+        if(lit_idx==_clauses[l_clause_idx].min_delta_lit_index){contained_in_min_delta_lit=true;}
         bool is_equal=l->is_equal;
         if((!is_equal&&delta_old<=0&&delta_new>0)||(is_equal&&delta_old==0&&delta_new!=0)){make_break_in_clause=(var->literals[i]>0)?(make_break_in_clause-1):(make_break_in_clause+1);}
         else if((!is_equal&&delta_old>0&&delta_new<=0)||(is_equal&&delta_old!=0&&delta_new==0)){make_break_in_clause=(var->literals[i]>0)?(make_break_in_clause+1):(make_break_in_clause-1);}
@@ -809,11 +886,32 @@ void ls_solver::critical_score_subscore(uint64_t var_idx, int64_t change_value){
             }
             cp->sat_count+=make_break_in_clause;
             make_break_in_clause=0;
-            if(cp->sat_count>0&&cp->sat_count<cp->literals.size()){sat_clause_with_false_literal->insert_element((int)curr_clause_idx);}
+            if(cp->sat_count==1){sat_clause_with_false_literal->insert_element((int)curr_clause_idx);}
             else{sat_clause_with_false_literal->delete_element((int)curr_clause_idx);}
+            //if new_future_min_delta<=cp->min_delta, then min_delta and watch needs updating if var is changed
+            if(new_future_min_delta<=cp->min_delta){
+                cp->min_delta=new_future_min_delta;
+                cp->min_delta_lit_index=min_delta_lit_idx;
+            }
+            else if(contained_in_min_delta_lit){
+                for(int cp_lit_idx:cp->literals){
+                    if(!lit_occur->is_in_array(cp_lit_idx)){
+                        pos_delta=_lits[std::abs(cp_lit_idx)].delta;
+                        convert_to_pos_delta(pos_delta, cp_lit_idx);
+                        if(pos_delta<new_future_min_delta){
+                            new_future_min_delta=pos_delta;
+                            min_delta_lit_idx=cp_lit_idx;
+                        }
+                    }
+                }
+            cp->min_delta=new_future_min_delta;
+            cp->min_delta_lit_index=min_delta_lit_idx;
+            }//if new_future_min_delta>cp->min_delta and var_idx belongs to the watch_lit
+            new_future_min_delta=INT64_MAX;
+            contained_in_min_delta_lit=false;
+            lit_occur->clear();
         }
     }
-    int lit_idx;
     for(int i=0;i<var->literals.size();i++){
         lit_idx=std::abs(var->literals[i]);
         if(lit_exist[lit_idx]==0){

@@ -46,6 +46,8 @@ struct clause{
     std::vector<int>            literals;//literals[i]=l means the ith literal of the clause if the pos(neg) of the _lits, it can be negative
     int                          weight=1;
     int                          sat_count;
+    int64_t                      min_delta;//a positive value, the distance from sat, delta for pos lit, 1-delta for neg lit
+    int                          min_delta_lit_index;//the lit index with the min_delta
 };
 
 class ls_solver{
@@ -63,7 +65,10 @@ public:
     std::vector<clause>         _clauses;
     Array                       *unsat_clauses;
     Array                       *sat_clause_with_false_literal;//clauses with 0<sat_num<literal_num, from which swap operation are choosen
+    Array                       *lit_occur;//the lit containing the var in one single clause
+    int                         lia_var_idx_with_most_lits;
     bool                        use_pbs=false;
+    bool                        is_idl=true;//if it is the IDL mode
     //solution
     std::vector<int64_t>       _solution;
     std::vector<int64_t>       _best_solutin;
@@ -124,6 +129,7 @@ public:
     //basic operations
     inline void                 sat_a_clause(uint64_t clause_idx){unsat_clauses->delete_element((int)clause_idx);};
     inline void                 unsat_a_clause(uint64_t clause_idx){unsat_clauses->insert_element((int)clause_idx);};
+    inline void                 convert_to_pos_delta(int64_t &delta,int l_idx){if(l_idx<0){delta=1-delta;}if(delta<0){delta=0;}}
     bool                        update_best_solution();
     void                        modify_CC(uint64_t var_idx,int direction);
     int                         pick_critical_move(int64_t &best_value);
@@ -142,7 +148,7 @@ public:
     void                        print_lit_pbs(lit &l);
     //calculate score
     int                         critical_score(uint64_t var_idx,int64_t change_value);
-    int                         critical_subscore(uint64_t var_idx,int64_t change_value);
+    int64_t                     critical_subscore(uint64_t var_idx,int64_t change_value);
     void                        critical_score_subscore(uint64_t var_idx,int64_t change_value);
     //check
     bool                        check_solution();
