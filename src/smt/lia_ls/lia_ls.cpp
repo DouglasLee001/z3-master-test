@@ -397,7 +397,7 @@ void ls_solver::initialize_clause_datas(){
         }
         if(cl->sat_count==0){unsat_a_clause(c);}
         else{sat_a_clause(c);}
-        if(cl->sat_count==1){sat_clause_with_false_literal->insert_element((int)c);}
+        if(cl->sat_count>0&&cl->sat_count<cl->literals.size()){sat_clause_with_false_literal->insert_element((int)c);}
     }
     total_clause_weight=_num_clauses;
 }
@@ -640,7 +640,7 @@ int ls_solver::pick_critical_move(int64_t &best_value){
     if(!sat_clause_with_false_literal->empty()&&is_idl){
         best_score=0;
         operation_idx=0;
-        for(int i=0;operation_idx<45&&i<100;i++){add_swap_operation(operation_idx);}
+        for(int i=0;operation_idx<20&&i<50;i++){add_swap_operation(operation_idx);}
         for(int i=0;i<operation_idx;i++){
             operation_change_value=operation_change_value_vec[i];
             operation_var_idx=operation_var_idx_vec[i];
@@ -886,7 +886,7 @@ void ls_solver::critical_score_subscore(uint64_t var_idx, int64_t change_value){
             }
             cp->sat_count+=make_break_in_clause;
             make_break_in_clause=0;
-            if(cp->sat_count==1){sat_clause_with_false_literal->insert_element((int)curr_clause_idx);}
+            if(cp->sat_count>0&&cp->sat_count<cp->literals.size()){sat_clause_with_false_literal->insert_element((int)curr_clause_idx);}
             else{sat_clause_with_false_literal->delete_element((int)curr_clause_idx);}
             //if new_future_min_delta<=cp->min_delta, then min_delta and watch needs updating if var is changed
             if(new_future_min_delta<=cp->min_delta){
