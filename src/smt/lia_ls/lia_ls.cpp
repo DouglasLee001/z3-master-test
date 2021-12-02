@@ -637,7 +637,7 @@ int ls_solver::pick_critical_move(int64_t &best_value){
     //if there is untabu decreasing move
     if(best_var_idx!=-1){return best_var_idx;}
     //choose from swap operations if there is no decreasing unsat critical
-    if(!sat_clause_with_false_literal->empty()&&is_idl){
+    if(!sat_clause_with_false_literal->empty()){
         best_score=0;
         operation_idx=0;
         for(int i=0;operation_idx<20&&i<50;i++){add_swap_operation(operation_idx);}
