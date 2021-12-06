@@ -22,7 +22,15 @@ void ls_solver::build_lits(std::string &in_string){
     int lit_index=std::atoi(vec[0].c_str());
     if(vec[1][1]=='!'){_lits[lit_index].lits_index=0;return;}//lits index==0 means that the lit is true
     lit *l=&(_lits[lit_index]);
+    if(vec[1]=="or"){
+        l->delta=transfer_name_to_resolution_var(vec[2], false);
+        l->key=1;
+        l->is_lia_lit=false;
+        l->lits_index=lit_index;
+        return;
+    }//or term in the form: 1 or newvar_2
     if(vec.size()>2){
+        l->is_lia_lit=true;
         if(vec.size()>6){
             l->lits_index=std::atoi(vec[0].c_str());
             int idx=5;
@@ -67,7 +75,10 @@ void ls_solver::build_lits(std::string &in_string){
         
     }//lia lit
     else{
-        
+        l->delta=transfer_name_to_resolution_var(vec[1],false);
+        l->key=1;
+        l->is_lia_lit=false;
+        l->lits_index=lit_index;
     }//boolean lit
     
 }
@@ -76,7 +87,7 @@ void ls_solver::build_instance(std::vector<std::vector<int> >& clause_vec){
     for(int clause_idx=0;clause_idx<clause_vec.size();clause_idx++){
         if(clause_vec[clause_idx].size()==1){
             lit *l=&(_lits[std::abs(clause_vec[clause_idx][0])]);
-            if(l->is_equal){continue;}//equal lit is not bound lit
+            if(l->is_equal||!l->is_lia_lit){continue;}//equal lit is not bound lit
             if(l->pos_coff.size()==0&&l->neg_coff.size()==1){
                 if(clause_vec[clause_idx][0]>0&&l->key>_tmp_vars[l->neg_coff_var_idx[0]].low_bound){_tmp_vars[l->neg_coff_var_idx[0]].low_bound=l->key;}
                 else if(clause_vec[clause_idx][0]<0&&(l->key-1)<_tmp_vars[l->neg_coff_var_idx[0]].upper_bound){_tmp_vars[l->neg_coff_var_idx[0]].upper_bound=(l->key-1);}
@@ -107,79 +118,66 @@ void ls_solver::build_instance(std::vector<std::vector<int> >& clause_vec){
         for (auto l_idx : clause_curr) {
             _clauses[_num_clauses].literals.push_back(l_idx);
             lit *l=&(_lits[std::abs(l_idx)]);
-            variable *v;
-            for(int i=0;i<l->pos_coff.size();i++){
-                v=&(_vars[l->pos_coff_var_idx[i]]);
-                v->literals.push_back(l_idx);
-                v->literal_clause.push_back((int)_num_clauses);
-                v->literal_coff.push_back(l->pos_coff[i]);
-            }
-            for(int i=0;i<l->neg_coff.size();i++){
-                v=&(_vars[l->neg_coff_var_idx[i]]);
-                v->literals.push_back(l_idx);
-                v->literal_clause.push_back((int)_num_clauses);
-                v->literal_coff.push_back(-l->neg_coff[i]);
-            }
+            if(l->lits_index==0){continue;}
+            if(!l->is_lia_lit){_resolution_vars[l->delta].clause_idxs.push_back(_num_clauses);}
         }
         _num_clauses++;
     }
-    for(variable & v:_vars){
-        int pre_clause_idx=INT32_MAX;
-        for(int i=0;i<v.literal_clause.size();i++){
-            int tmp_clause_idx=v.literal_clause[i];
-            if(pre_clause_idx!=tmp_clause_idx){
-                v.clause_idxs.push_back(tmp_clause_idx);
-                pre_clause_idx=tmp_clause_idx;
-            }
-        }
-    }
-    _num_vars=_vars.size();
+    _clauses.resize(_num_clauses);
+    //now the vars are all in the resolution vars
+    unit_prop();
+    resolution();
+    unit_prop();
+    reduce_clause();
+//    print_formula();
     best_found_cost=(int)_num_clauses;
     make_space();
-    int64_t max_lit_num=0;
-    for(int var_idx=0;var_idx<_num_vars;var_idx++){
-        if(_vars[var_idx].literals.size()>max_lit_num){
-            lia_var_idx_with_most_lits=var_idx;
-            max_lit_num=_vars[var_idx].literals.size();
-        }
-    }
-    for(int lit_idx=0;lit_idx<_lits.size();lit_idx++){
-        lit *l=&(_lits[lit_idx]);
-        if(l->lits_index==0){continue;}
-        if(l->pos_coff.size()!=1||l->neg_coff.size()!=1||l->pos_coff[0]!=1||l->neg_coff[0]!=1){
-            lia_var_idx_with_most_lits=-1;
-            is_idl=false;
-            break;
-        }//var_with most lit are dedicated for IDL
-    }
 }
 
-uint64_t ls_solver::transfer_name_to_var(std::string & name){
+uint64_t ls_solver::transfer_name_to_reduced_var(std::string &name, bool is_lia){
     if(name2var.find(name)==name2var.end()){
         name2var[name]=_vars.size();
+        variable var;
+        var.var_name=name;
+        var.is_lia=is_lia;
+        _vars.push_back(var);
+        if(is_lia){lia_var_vec.push_back((int)_vars.size()-1);}
+        else{bool_var_vec.push_back((int)_vars.size()-1);}
+        return _vars.size()-1;
+    }
+    else return name2var[name];
+}
+
+uint64_t ls_solver::transfer_name_to_resolution_var(std::string & name,bool is_lia){
+    if(name2resolution_var.find(name)==name2resolution_var.end()){
+        name2resolution_var[name]=_resolution_vars.size();
         variable var;
         var.clause_idxs.reserve(64);
         var.literals.reserve(64);
         var.literal_clause.reserve(64);
         var.literal_coff.reserve(64);
         var.var_name=name;
-        _vars.push_back(var);
-        return _vars.size()-1;
+        var.is_lia=is_lia;
+        _resolution_vars.push_back(var);
+        if(is_lia){lia_var_vec.push_back((int)_resolution_vars.size()-1);}
+        else{bool_var_vec.push_back((int)_resolution_vars.size()-1);}
+        return _resolution_vars.size()-1;
     }
-    else return name2var[name];
+    else return name2resolution_var[name];
 }
 
 uint64_t ls_solver::transfer_name_to_tmp_var(std::string & name){
-    if(name2var.find(name)==name2var.end()){
-        name2var[name]=_tmp_vars.size();
+    if(name2tmp_var.find(name)==name2tmp_var.end()){
+        name2tmp_var[name]=_tmp_vars.size();
         variable var;
+        var.is_lia=true;
         var.var_name=name;
         _tmp_vars.push_back(var);
         return _tmp_vars.size()-1;
     }
-    else return name2var[name];
+    else return name2tmp_var[name];
 }
-
+//transfer the lia var into _resolution_vars, turn (x-y) to z
 void ls_solver::reduce_vars(){
     const uint64_t tmp_vars_size=_tmp_vars.size();
     std::vector<int> hash_map(tmp_vars_size*tmp_vars_size,0);//hash_map[A*(size)+b]=n means A-B has occurred n times
@@ -191,11 +189,11 @@ void ls_solver::reduce_vars(){
     variable * new_var;
     std::string var_name;
     int pos_var_idx,neg_var_idx,original_var_idx;
-    use_pbs=true;
+    use_pbs=!(_resolution_vars.size()==0);
     for(int var_idx=0;var_idx<tmp_vars_size;var_idx++){
         if(_tmp_vars[var_idx].upper_bound>1||_tmp_vars[var_idx].low_bound<0){use_pbs=false;break;}
     }
-    if(use_pbs){_vars=_tmp_vars;}
+    if(use_pbs){_resolution_vars=_tmp_vars;}//if there is no boolean vars and all lia vars are in [0,1], then use pbs, and no need to reduce the vars
     else{
     //calculate the hash_map
     for(uint64_t l_idx=0;l_idx<_num_lits;l_idx++){
@@ -214,7 +212,7 @@ void ls_solver::reduce_vars(){
     //calculate the occur time
     for(uint64_t l_idx=0;l_idx<_num_lits;l_idx++){
         l=&(_lits[l_idx]);
-        if(l->lits_index==0){continue;}
+        if(l->lits_index==0||!l->is_lia_lit){continue;}
         for(int i=0;i<l->pos_coff.size();i++){occur_time[l->pos_coff_var_idx[i]]++;}
         for(int i=0;i<l->neg_coff.size();i++){occur_time[l->neg_coff_var_idx[i]]++;}
     }
@@ -234,10 +232,11 @@ void ls_solver::reduce_vars(){
     for(uint64_t l_idx=0;l_idx<_num_lits;l_idx++){
         l=&(_lits[l_idx]);
         lit new_lit;
-        if(l->lits_index==0){continue;}
+        if(l->lits_index==0||!l->is_lia_lit){continue;}
         new_lit.key=l->key;
         new_lit.lits_index=l->lits_index;
         new_lit.is_equal=l->is_equal;
+        new_lit.is_lia_lit=l->is_lia_lit;
         for(int i=0;i<l->pos_coff.size();i++){
             original_var_idx=l->pos_coff_var_idx[i];
             original_var=&(_tmp_vars[original_var_idx]);
@@ -245,17 +244,17 @@ void ls_solver::reduce_vars(){
                 new_lit.pos_coff.push_back(l->pos_coff[i]);
 //                var_name="_new_var_"+std::to_string(pair_x->index_of(original_var_idx));
                 var_name="_new_var_"+original_var->var_name;
-                new_lit.pos_coff_var_idx.push_back((int)transfer_name_to_var(var_name));
+                new_lit.pos_coff_var_idx.push_back((int)transfer_name_to_resolution_var(var_name,true));
             }
             else if(pair_y->is_in_array(original_var_idx)){
                 new_lit.neg_coff.push_back(l->pos_coff[i]);
 //                var_name="_new_var_"+std::to_string(pair_y->index_of(original_var_idx));
                 var_name="_new_var_"+_tmp_vars[pair_x->element_at(pair_y->index_of(original_var_idx))].var_name;
-                new_lit.neg_coff_var_idx.push_back((int)transfer_name_to_var(var_name));
+                new_lit.neg_coff_var_idx.push_back((int)transfer_name_to_resolution_var(var_name,true));
             }
             else{
                 new_lit.pos_coff.push_back(l->pos_coff[i]);
-                new_lit.pos_coff_var_idx.push_back((int)transfer_name_to_var(original_var->var_name));
+                new_lit.pos_coff_var_idx.push_back((int)transfer_name_to_resolution_var(original_var->var_name,true));
             }
         }
         for(int i=0;i<l->neg_coff.size();i++){
@@ -263,7 +262,7 @@ void ls_solver::reduce_vars(){
             original_var=&(_tmp_vars[original_var_idx]);
             if(!pair_x->is_in_array(original_var_idx)&&!pair_y->is_in_array(original_var_idx)){
                 new_lit.neg_coff.push_back(l->neg_coff[i]);
-                new_lit.neg_coff_var_idx.push_back((int)transfer_name_to_var(original_var->var_name));
+                new_lit.neg_coff_var_idx.push_back((int)transfer_name_to_resolution_var(original_var->var_name,true));
             }
         }
         _lits[l_idx]=new_lit;
@@ -274,7 +273,7 @@ void ls_solver::reduce_vars(){
         if(occur_time[original_var_idx]==0){continue;}
         //original var
         if(!pair_x->is_in_array(original_var_idx)&&!pair_y->is_in_array(original_var_idx)){
-            new_var=&(_vars[transfer_name_to_var(original_var->var_name)]);
+            new_var=&(_resolution_vars[transfer_name_to_resolution_var(original_var->var_name,true)]);
             new_var->low_bound=original_var->low_bound;
             new_var->upper_bound=original_var->upper_bound;
         }
@@ -283,7 +282,7 @@ void ls_solver::reduce_vars(){
             int pair_idx=pair_x->index_of(original_var_idx);
 //            var_name="_new_var_"+std::to_string(pair_idx);
             var_name="_new_var_"+original_var->var_name;
-            new_var=&(_vars[transfer_name_to_var(var_name)]);
+            new_var=&(_resolution_vars[transfer_name_to_resolution_var(var_name,true)]);
             int64_t x_low=original_var->low_bound;
             int64_t x_upper=original_var->upper_bound;
             int64_t y_low=_tmp_vars[pair_y->element_at(pair_idx)].low_bound;
@@ -296,12 +295,14 @@ void ls_solver::reduce_vars(){
     }
     }
     int num_var_with_bound=0;
-    for(int var_idx=0;var_idx<_vars.size();var_idx++){
-        new_var=&(_vars[var_idx]);
+    for(int var_idx=0;var_idx<_resolution_vars.size();var_idx++){
+        new_var=&(_resolution_vars[var_idx]);
+        if(!new_var->is_lia){continue;}
         if(new_var->upper_bound!=max_int&&new_var->low_bound!=-max_int){continue;}//if a var has both upper bound and lower bound, no bound lits is added.
         if(new_var->low_bound!=-max_int){
             int lit_idx=_bound_lits[num_var_with_bound++];
             lit bound_lit;
+            bound_lit.is_lia_lit=true;
             bound_lit.lits_index=lit_idx;
             bound_lit.neg_coff.push_back(1);
             bound_lit.neg_coff_var_idx.push_back(var_idx);
@@ -312,6 +313,7 @@ void ls_solver::reduce_vars(){
         if(new_var->upper_bound!=max_int){
             int lit_idx=_bound_lits[num_var_with_bound++];
             lit bound_lit;
+            bound_lit.is_lia_lit=true;
             bound_lit.lits_index=lit_idx;
             bound_lit.pos_coff.push_back(1);
             bound_lit.pos_coff_var_idx.push_back(var_idx);
@@ -319,6 +321,244 @@ void ls_solver::reduce_vars(){
             _lits[lit_idx]=bound_lit;
             new_var->upper_bound=max_int;
         }
+    }
+}
+
+void ls_solver::unit_prop(){
+    std::stack<uint64_t> unit_clause;//the var_idx in the unit clause
+    for(uint64_t clause_idx=0;clause_idx<_num_clauses;clause_idx++){//the unit clause is the undeleted clause containing only one bool var
+        if(!_clauses[clause_idx].is_delete&&_clauses[clause_idx].literals.size()==1&&!_lits[std::abs(_clauses[clause_idx].literals[0])].is_lia_lit){unit_clause.push(clause_idx);}
+    }
+    while(!unit_clause.empty()){
+        uint64_t unit_clause_idx=unit_clause.top();
+        unit_clause.pop();
+        if(_clauses[unit_clause_idx].is_delete){continue;}
+        int is_pos_lit=(_clauses[unit_clause_idx].literals[0]>0)?1:-1;//determine the sign of the var in unit clause
+        uint64_t unit_var=_lits[std::abs(_clauses[unit_clause_idx].literals[0])].delta;//determing the var in unit clause
+        _resolution_vars[unit_var].is_delete=true;//delete the unit var
+        for(uint64_t cl_idx:_resolution_vars[unit_var].clause_idxs){
+            clause *cl=&(_clauses[cl_idx]);
+            if(cl->is_delete)continue;
+            for(uint64_t lit_idx=0;lit_idx<cl->literals.size();lit_idx++){
+                int l_id_in_lits=cl->literals[lit_idx];
+                lit *l=&(_lits[std::abs(l_id_in_lits)]);
+                if(!l->is_lia_lit&&l->delta==unit_var){//go through the clauses of the unit var, find the var in corresponding clause
+                    if((is_pos_lit>0&&l_id_in_lits>0)||(is_pos_lit<0&&l_id_in_lits<0)){
+                        cl->is_delete=true;
+                        for(int l_idx_inner:cl->literals){//delete the clause from corresponding bool var
+                            lit *l_inner=&(_lits[std::abs(l_idx_inner)]);
+                            if(!l_inner->is_lia_lit&&l_inner->delta!=unit_var){
+                                variable *var_inner=&(_resolution_vars[l_inner->delta]);
+                                for(uint64_t delete_idx=0;delete_idx<var_inner->clause_idxs.size();delete_idx++){
+                                    if(var_inner->clause_idxs[delete_idx]==cl_idx){
+                                        var_inner->clause_idxs[delete_idx]=var_inner->clause_idxs.back();
+                                        var_inner->clause_idxs.pop_back();
+                                        break;
+                                    }
+                                }
+                            }
+                        }
+                    }//if there exist same lit, the clause is already set true, then delete the clause
+                    else{//else delete the lit
+                        cl->literals[lit_idx]=cl->literals.back();
+                        cl->literals.pop_back();
+                        if(cl->literals.size()==1&&!_lits[std::abs(cl->literals[0])].is_lia_lit){unit_clause.push(cl_idx);}//if after deleting, it becomes unit clause
+                    }
+                    break;
+                }
+            }
+        }
+    }
+}
+
+void ls_solver::resolution(){
+    std::vector<uint64_t> pos_clauses(10*_num_clauses);
+    std::vector<uint64_t> neg_clauses(10*_num_clauses);
+    int pos_clause_size,neg_clause_size;
+    bool is_improve=true;
+    while(is_improve){
+        is_improve=false;
+    for(uint64_t bool_var_idx:bool_var_vec){
+        if(_resolution_vars[bool_var_idx].is_delete)continue;
+        pos_clause_size=0;neg_clause_size=0;
+        for(int i=0;i<_resolution_vars[bool_var_idx].clause_idxs.size();i++){
+            uint64_t clause_idx=_resolution_vars[bool_var_idx].clause_idxs[i];
+            if(_clauses[clause_idx].is_delete)continue;
+            for(int l_var_sign:_clauses[clause_idx].literals){
+                if(_lits[std::abs(l_var_sign)].delta==bool_var_idx){
+                    if(l_var_sign>0){pos_clauses[pos_clause_size++]=clause_idx;}
+                    else{neg_clauses[neg_clause_size++]=clause_idx;}
+                    break;
+                }
+            }
+        }//determine the pos_clause and neg_clause
+        int tautology_num=0;
+        for(int i=0;i<pos_clause_size;i++){//pos clause X neg clause
+            uint64_t pos_clause_idx=pos_clauses[i];
+            for(int j=0;j<neg_clause_size;j++){
+                uint64_t neg_clause_idx=neg_clauses[j];
+                for(int k=0;k<_clauses[neg_clause_idx].literals.size();k++){
+                    int l_neg_lit=_clauses[neg_clause_idx].literals[k];
+                    if(_lits[std::abs(l_neg_lit)].delta!=bool_var_idx){//the bool_var for resolution is not considered
+                        for(int l_pos_lit:_clauses[pos_clause_idx].literals){
+                            if(-l_neg_lit==(l_pos_lit)){
+                                tautology_num++;
+                                break;
+                            }//if there exists (aVb)^(-aV-b), the new clause is tautology
+                        }
+                    }
+                }
+            }
+        }
+        if((pos_clause_size*neg_clause_size-tautology_num)>(pos_clause_size+neg_clause_size)){continue;}//if deleting the var can cause 2 times clauses, then skip it
+        for(uint64_t clause_idx:_resolution_vars[bool_var_idx].clause_idxs){//delete the clauses of bool_var
+            _clauses[clause_idx].is_delete=true;
+            for(int l_idx_sign:_clauses[clause_idx].literals){//delete the clause from corresponding bool var
+                lit *l=&(_lits[std::abs(l_idx_sign)]);
+                if(!l->is_lia_lit&&l->delta!=bool_var_idx){
+                    variable *var_inner=&(_resolution_vars[l->delta]);
+                    for(uint64_t delete_idx=0;delete_idx<var_inner->clause_idxs.size();delete_idx++){
+                        if(var_inner->clause_idxs[delete_idx]==clause_idx){
+                            var_inner->clause_idxs[delete_idx]=var_inner->clause_idxs.back();
+                            var_inner->clause_idxs.pop_back();
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+        is_improve=true;
+        _resolution_vars[bool_var_idx].is_delete=true;
+        if(pos_clause_size==0||neg_clause_size==0)continue;//pos or neg clause is empty, meaning the clauses are SAT when assigned to true or false, then cannot resolute, just delete the clause
+        for(int i=0;i<pos_clause_size;i++){//pos clause X neg clause
+            uint64_t pos_clause_idx=pos_clauses[i];
+            for(int j=0;j<neg_clause_size;j++){
+                uint64_t neg_clause_idx=neg_clauses[j];
+                clause new_clause;
+                uint64_t pos_lit_size=_clauses[pos_clause_idx].literals.size();
+                uint64_t neg_lit_size=_clauses[neg_clause_idx].literals.size();
+                new_clause.literals.reserve(pos_lit_size+neg_lit_size);
+                bool is_tautology=false;
+                for(int k=0;k<pos_lit_size;k++){
+                    int l_sign_idx=_clauses[pos_clause_idx].literals[k];
+                    if(_lits[std::abs(l_sign_idx)].is_lia_lit||_lits[std::abs(l_sign_idx)].delta!=bool_var_idx){new_clause.literals.push_back(l_sign_idx);}
+                }//add the lits in pos clause to new clause
+                for(int k=0;k<neg_lit_size;k++){
+                    int l_sign_idx=_clauses[neg_clause_idx].literals[k];
+                    if(_lits[std::abs(l_sign_idx)].is_lia_lit||_lits[std::abs(l_sign_idx)].delta!=bool_var_idx){
+                        bool is_existed_lit=false;
+                        for(uint64_t i=0;i<pos_lit_size-1;i++){
+                            if(l_sign_idx==(new_clause.literals[i])){is_existed_lit=true;break;}// if the lit has existed, then it will not be added
+                            if(l_sign_idx==(-new_clause.literals[i])){is_tautology=true;break;}//if there exists (aVb)^(-aV-b), the new clause is tautology
+                        }
+                        if(is_tautology){break;}
+                        if(!is_existed_lit){new_clause.literals.push_back(l_sign_idx);}
+                    }
+                }
+                if(!is_tautology){//add new clause, and modify the clause of corresponding bool var
+                    for(int l_sign_idx:new_clause.literals){
+                        lit *l_inner=&(_lits[std::abs(l_sign_idx)]);
+                        if(!l_inner->is_lia_lit){
+                            _resolution_vars[l_inner->delta].clause_idxs.push_back((int)_num_clauses);
+                        }
+                    }
+                    _clauses.push_back(new_clause);
+                    _num_clauses++;
+                }
+            }
+        }
+    }
+    }
+}
+
+void ls_solver::reduce_clause(){
+    bool_var_vec.clear();
+    lia_var_vec.clear();
+    _vars.reserve(_resolution_vars.size());
+    int i,reduced_clause_num;
+    i=0;reduced_clause_num=0;
+    for(;i<_num_clauses;i++){if(!_clauses[i].is_delete){_clauses[reduced_clause_num++]=_clauses[i];}}
+    _clauses.resize(reduced_clause_num);
+    
+    _num_lia_lits=0;_num_bool_lits=0;
+    for(int l_idx=0;l_idx<_lits.size();l_idx++){
+        lit *l=&(_lits[l_idx]);
+        if(l->lits_index==0){continue;}
+        if(l->is_lia_lit){
+            _num_lia_lits++;
+            for(int pos_var_idx=0;pos_var_idx<l->pos_coff.size();pos_var_idx++)
+                {l->pos_coff_var_idx[pos_var_idx]=(int)transfer_name_to_reduced_var(_resolution_vars[l->pos_coff_var_idx[pos_var_idx]].var_name, true);}
+            for(int neg_var_idx=0;neg_var_idx<l->neg_coff.size();neg_var_idx++)
+                {l->neg_coff_var_idx[neg_var_idx]=(int)transfer_name_to_reduced_var(_resolution_vars[l->neg_coff_var_idx[neg_var_idx]].var_name, true);}
+        }
+        else{
+            if(!_resolution_vars[l->delta].is_delete){
+                l->delta=transfer_name_to_reduced_var(_resolution_vars[l->delta].var_name, false);
+                _num_bool_lits++;
+            }
+            else{l->lits_index=0;}
+        }
+    }//transfer the resolution vars to vars
+    _num_clauses=reduced_clause_num;
+    _vars.resize(_vars.size());
+    _num_vars=_vars.size();
+    for(int clause_idx=0;clause_idx<reduced_clause_num;clause_idx++){
+        _clauses[clause_idx].weight=1;
+        for(int k=0;k<_clauses[clause_idx].literals.size();k++){
+            int l_sign_idx=_clauses[clause_idx].literals[k];
+            lit *l=&(_lits[std::abs(l_sign_idx)]);
+            if(l->is_lia_lit){
+                variable *v;
+                for(int j=0;j<l->pos_coff.size();j++){
+                    v=&(_vars[l->pos_coff_var_idx[j]]);
+                    v->literals.push_back(l_sign_idx);
+                    v->literal_clause.push_back(clause_idx);
+                    v->literal_coff.push_back(l->pos_coff[j]);
+                }
+                for(int j=0;j<l->neg_coff.size();j++){
+                    v=&(_vars[l->neg_coff_var_idx[j]]);
+                    v->literals.push_back(l_sign_idx);
+                    v->literal_clause.push_back(clause_idx);
+                    v->literal_coff.push_back(-l->neg_coff[j]);
+                }
+                _clauses[clause_idx].lia_literals.push_back(l_sign_idx);
+            }
+            else{
+                _vars[l->delta].literals.push_back(l_sign_idx);
+                _clauses[i].bool_literals.push_back(l_sign_idx);
+            }
+        }
+    }//determine the literals of vars
+    for(variable & v:_vars){
+        int pre_clause_idx=INT32_MAX;
+        for(int i=0;i<v.literal_clause.size();i++){
+            int tmp_clause_idx=v.literal_clause[i];
+            if(pre_clause_idx!=tmp_clause_idx){
+                v.clause_idxs.push_back(tmp_clause_idx);
+                pre_clause_idx=tmp_clause_idx;
+            }
+        }
+        if(v.is_lia){
+            v.upper_bound=_resolution_vars[transfer_name_to_resolution_var(v.var_name, true)].upper_bound;
+            v.low_bound=_resolution_vars[transfer_name_to_resolution_var(v.var_name, true)].low_bound;
+        }
+    }//determine the clause_idxs of var
+    int64_t max_lit_num=0;
+    for(int var_idx=0;var_idx<_num_vars;var_idx++){
+        if(!_vars[var_idx].is_lia){continue;}
+        if(_vars[var_idx].literals.size()>max_lit_num){
+            lia_var_idx_with_most_lits=var_idx;
+            max_lit_num=_vars[var_idx].literals.size();
+        }
+    }
+    for(int lit_idx=0;lit_idx<_lits.size();lit_idx++){
+        lit *l=&(_lits[lit_idx]);
+        if(l->lits_index==0||!l->is_lia_lit){continue;}
+        if(l->pos_coff.size()!=1||l->neg_coff.size()!=1||l->pos_coff[0]!=1||l->neg_coff[0]!=1){
+            lia_var_idx_with_most_lits=-1;
+            is_idl=false;
+            break;
+        }//var_with most lit are dedicated for IDL
     }
 }
 
@@ -762,11 +1002,14 @@ void ls_solver::print_formula_pbs(){
 }
 
 void ls_solver::print_literal(lit &l){
+    if(!l.is_lia_lit){std::cout<<_vars[l.delta].var_name<<"\n";}
+    else{
     for(int i=0;i<l.pos_coff.size();i++)
         {std::cout<<"( "<<l.pos_coff[i]<<" * "<<_vars[l.pos_coff_var_idx[i]].var_name<<" ) + ";}
     for(int i=0;i<l.neg_coff.size();i++)
         {std::cout<<"( -"<<l.neg_coff[i]<<" * "<<_vars[l.neg_coff_var_idx[i]].var_name<<" ) + ";}
     std::cout<<"( "<<l.key<<" ) "<<(l.is_equal?"==":"<=")<<" 0\n";
+    }
 }
 
 void ls_solver::print_lit_pbs(lit &l){

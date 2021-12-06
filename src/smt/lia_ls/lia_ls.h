@@ -21,6 +21,8 @@ namespace lia {
 const int64_t max_int=9223372036854775800;
 //one arith lit is in the form of a_1*x_1+...+a_n*x_n+k<=0, the cofficient are divided into positive ones and negative ones, the coff are positive.
 //if neg_coff =1 neg_coff_var=x pos_coff=1 pos_coff_var=y means y-x
+//if is_lia_lit: \sum coff*var_idx<=key
+//else:_vars[delta] 
 struct lit{
     std::vector<int>            pos_coff_var_idx;
     std::vector<int64_t>        pos_coff;
@@ -30,6 +32,7 @@ struct lit{
     int                         lits_index;
     int64_t                     delta;//the current value of left side
     bool                        is_equal=false;//true means a-b-k==0, else a-b-k<=0
+    bool                        is_lia_lit=false;
 };
 
 struct variable{
@@ -40,14 +43,20 @@ struct variable{
     std::string                 var_name;
     int64_t                         low_bound=-max_int;
     int64_t                         upper_bound=max_int;
+    bool                        is_lia;
+    bool                        is_delete=false;
+    int                         score;//if it is a bool var, then the score is calculated beforehand
 };
 
 struct clause{
     std::vector<int>            literals;//literals[i]=l means the ith literal of the clause if the pos(neg) of the _lits, it can be negative
+    std::vector<int>            lia_literals;
+    std::vector<int>             bool_literals;
     int                          weight=1;
     int                          sat_count;
     int64_t                      min_delta;//a positive value, the distance from sat, delta for pos lit, 1-delta for neg lit
     int                          min_delta_lit_index;//the lit index with the min_delta
+    bool                         is_delete=false;
 };
 
 class ls_solver{
@@ -56,10 +65,15 @@ public:
     //basic information
     uint64_t                    _num_vars;
     uint64_t                    _num_lits;
+    int                         _num_lia_lits;
+    int                         _num_bool_lits;
     uint64_t                    _num_clauses;
     uint64_t                    _num_opt=0;//the number of vars in all literals, which is the max number of operations
     std::vector<variable>       _vars;
     std::vector<variable>       _tmp_vars;
+    std::vector<variable>        _resolution_vars;
+    std::vector<int>            lia_var_vec;
+    std::vector<int>            bool_var_vec;
     std::vector<lit>            _lits;
     std::vector<int>            _bound_lits;//record the index of bounded lits
     std::vector<clause>         _clauses;
@@ -89,6 +103,8 @@ public:
     std::mt19937                mt;
     const uint64_t              _additional_len;
     std::map<std::string,uint64_t> name2var;//map the name of a variable to its index
+    std::map<std::string,uint64_t> name2tmp_var;
+    std::map<std::string,uint64_t> name2resolution_var;
     // data structure for clause weighting
     const uint64_t              smooth_probability;
     uint64_t                    _swt_threshold;
@@ -99,8 +115,9 @@ public:
     void                        split_string(std::string &in_string, std::vector<std::string> &str_vec,std::string pattern);
     void                        build_lits(std::string &in_string);
     void                        build_instance(std::vector<std::vector<int> >& clause_vec);
-    uint64_t                    transfer_name_to_var(std::string & name);
-    uint64_t                    transfer_name_to_tmp_var(std::string &name);
+    uint64_t                    transfer_name_to_reduced_var(std::string & name,bool is_lia);//after the resolution vars are inserted into _vars
+    uint64_t                    transfer_name_to_resolution_var(std::string &name,bool is_lia);//bool var is inserted into _resolution_var when build lit
+    uint64_t                    transfer_name_to_tmp_var(std::string &name);//lia var is first inserted into _tmp_var when build lit, then inserted into _resolution_var when reduce var(x-y->z)
     void                        reduce_vars();//reduce the x-y in all lits to new var z
     
     
@@ -114,6 +131,9 @@ public:
     void                        initialize_lit_datas();
     void                        initialize_clause_datas();
     void                        build_neighbor();
+    void                        unit_prop();
+    void                        resolution();
+    void                        reduce_clause();
     
     //random walk
     void                        update_clause_weight();
