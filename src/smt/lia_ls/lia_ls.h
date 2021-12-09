@@ -64,6 +64,7 @@ public:
     
     //basic information
     uint64_t                    _num_vars;
+    uint64_t                    _num_lia_vars;
     uint64_t                    _num_lits;
     int                         _num_lia_lits;
     int                         _num_bool_lits;
@@ -79,7 +80,8 @@ public:
     std::vector<clause>         _clauses;
     Array                       *unsat_clauses;
     Array                       *sat_clause_with_false_literal;//clauses with 0<sat_num<literal_num, from which swap operation are choosen
-    Array                       *lit_occur;//the lit containing the var in one single clause
+    Array                       *contain_bool_unsat_clauses;//unsat clause with at least one boolean var
+    Array                       *lit_occur;//the lit containing the lia var in one single clause
     int                         lia_var_idx_with_most_lits;
     bool                        use_pbs=false;
     bool                        is_idl=true;//if it is the IDL mode
@@ -90,13 +92,16 @@ public:
     int                         best_found_this_restart;
     //control
     uint64_t                    _step;
+    uint64_t                    _outer_layer_step;
     const uint64_t              _max_step;
     std::vector<uint64_t>       tabulist;//tabulist[2*var] and [2*var+1] means that var are forbidden to move forward or backward until then
     std::vector<int>            CClist;//CClist[2*var]==1 and [2*var+1]==1 means that var is allowed to move forward or backward
+    std::vector<bool>           is_chosen_bool_var;
     int                          CC_mode;
     std::vector<uint64_t>       last_move;
     std::vector<int>            operation_var_idx_vec;
     std::vector<int64_t>        operation_change_value_vec;
+    std::vector<int>             operation_var_idx_bool_vec;
     std::chrono::steady_clock::time_point start;
     double                      best_cost_time;
     double                      _cutoff;
@@ -110,6 +115,8 @@ public:
     uint64_t                    _swt_threshold;
     float                       _swt_p;//w=w*p+ave_w*(1-p)
     uint64_t                    total_clause_weight;
+    int                         _lit_in_unsat_clause_num;
+    int                         _bool_lit_in_unsat_clause_num;
     
     //input transformation
     void                        split_string(std::string &in_string, std::vector<std::string> &str_vec,std::string pattern);
@@ -147,12 +154,14 @@ public:
     int                         construct_score(uint64_t var_idx,int64_t change_value);
     
     //basic operations
-    inline void                 sat_a_clause(uint64_t clause_idx){unsat_clauses->delete_element((int)clause_idx);};
-    inline void                 unsat_a_clause(uint64_t clause_idx){unsat_clauses->insert_element((int)clause_idx);};
-    inline void                 convert_to_pos_delta(int64_t &delta,int l_idx){if(l_idx<0){delta=1-delta;}if(delta<0){delta=0;}}
+    inline void                 sat_a_clause(uint64_t clause_idx){unsat_clauses->delete_element((int)clause_idx);contain_bool_unsat_clauses->delete_element((int)clause_idx);};
+    inline void                 unsat_a_clause(uint64_t clause_idx){unsat_clauses->insert_element((int)clause_idx);
+                                 if(_clauses[clause_idx].bool_literals.size()>0)contain_bool_unsat_clauses->insert_element((int)clause_idx);};
+    void                        convert_to_pos_delta(int64_t &delta,int l_idx);
     bool                        update_best_solution();
     void                        modify_CC(uint64_t var_idx,int direction);
     int                         pick_critical_move(int64_t &best_value);
+    int                         pick_critical_move_bool();
     void                        critical_move(uint64_t var_idx,int64_t change_value);
     void                        invert_lit(lit &l);
     int64_t                     delta_lit(lit &l);
@@ -166,10 +175,13 @@ public:
     void                        print_literal(lit &l);
     void                        print_formula_pbs();
     void                        print_lit_pbs(lit &l);
+    void                        print_formula_smt();
+    void                        print_lit_smt(int lit_idx);
     //calculate score
     int                         critical_score(uint64_t var_idx,int64_t change_value);
     int64_t                     critical_subscore(uint64_t var_idx,int64_t change_value);
     void                        critical_score_subscore(uint64_t var_idx,int64_t change_value);
+    void                        critical_score_subscore(uint64_t var_idx);//dedicated for boolean var
     //check
     bool                        check_solution();
 
