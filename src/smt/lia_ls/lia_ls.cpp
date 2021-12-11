@@ -1055,6 +1055,10 @@ double ls_solver::TimeElapsed(){
 
 void ls_solver::clear_prev_data(){
     for(int v:bool_var_vec){_vars[v].score=0;}
+    _best_found_hard_cost_this_bool=INT32_MAX;
+    _best_found_hard_cost_this_lia=INT32_MAX;
+    no_improve_cnt_bool=0;
+    no_improve_cnt_lia=0;
 }
 //return the upper round of (a/b): (-3.5)->-4; (3.5)->4
 int64_t ls_solver::devide(int64_t a, int64_t b){
@@ -1463,6 +1467,34 @@ bool ls_solver::check_solution(){
     return unsat_num==unsat_clauses->size();
 }
 
+bool ls_solver::update_inner_best_solution(){
+    if(unsat_clauses->size()<_best_found_hard_cost_this_lia){
+        _best_found_hard_cost_this_lia=unsat_clauses->size();
+        return true;
+    }
+    return false;
+}
+
+bool ls_solver::update_outer_best_solution(){
+    if(unsat_clauses->size()<_best_found_hard_cost_this_bool){
+        _best_found_hard_cost_this_bool=unsat_clauses->size();
+        return true;
+    }
+    return false;
+}
+
+void ls_solver::enter_lia_mode(){
+    _best_found_hard_cost_this_lia=unsat_clauses->size();
+    no_improve_cnt_lia=0;
+    is_in_bool_search=false;
+}
+
+void ls_solver::enter_bool_mode(){
+    _best_found_hard_cost_this_bool=unsat_clauses->size();
+    no_improve_cnt_bool=0;
+    is_in_bool_search=true;
+}
+
 //local search
 bool ls_solver::local_search(){
     int no_improve_cnt=0;
@@ -1477,9 +1509,22 @@ bool ls_solver::local_search(){
             return true;}
         if(_step%1000==0&&(TimeElapsed()>_cutoff)){break;}
         if(no_improve_cnt>500000){initialize();no_improve_cnt=0;}//restart
-        if(mt()%_lit_in_unsat_clause_num<_bool_lit_in_unsat_clause_num){flipv=pick_critical_move_bool();}
-        else{flipv=pick_critical_move(change_value);}
-        if(flipv!=-1){critical_move(flipv, change_value);}
+        bool time_up_bool=(no_improve_cnt_bool*_lit_in_unsat_clause_num>5*_bool_lit_in_unsat_clause_num)||(unsat_clauses->size()<=20);
+        bool time_up_lia=(no_improve_cnt_lia*_lit_in_unsat_clause_num>20*(_lit_in_unsat_clause_num-_bool_lit_in_unsat_clause_num));
+        if((is_in_bool_search&&_bool_lit_in_unsat_clause_num<_lit_in_unsat_clause_num&&time_up_bool)||_bool_lit_in_unsat_clause_num==0){enter_lia_mode();}
+        if((!is_in_bool_search&&_bool_lit_in_unsat_clause_num>0&&time_up_lia)||(_lit_in_unsat_clause_num==_bool_lit_in_unsat_clause_num)){enter_bool_mode();}
+        if(is_in_bool_search){
+            flipv=pick_critical_move_bool();
+            if(flipv!=-1){critical_move(flipv, change_value);}
+            if(update_outer_best_solution()) no_improve_cnt_bool=0;
+            else                              no_improve_cnt_bool++;
+        }
+        else{
+            flipv=pick_critical_move(change_value);
+            if(flipv!=-1){critical_move(flipv, change_value);}
+            if(update_inner_best_solution()) no_improve_cnt_lia=0;
+            else                               no_improve_cnt_lia++;
+        }
         no_improve_cnt=(update_best_solution())?0:(no_improve_cnt+1);
     }
     return false;

@@ -90,6 +90,11 @@ public:
     std::vector<int64_t>       _best_solutin;
     int                         best_found_cost;
     int                         best_found_this_restart;
+    int                         no_improve_cnt_bool=0;
+    int                         no_improve_cnt_lia=0;
+    bool                        is_in_bool_search=false;
+    int                         _best_found_hard_cost_this_bool;
+    int                         _best_found_hard_cost_this_lia;
     //control
     uint64_t                    _step;
     uint64_t                    _outer_layer_step;
@@ -170,6 +175,10 @@ public:
     int64_t                     devide(int64_t a, int64_t b);
     void                        insert_operation(int var_idx,int64_t change_value,int &operation_idx);
     void                        add_swap_operation(int &operation_idx);
+    void                        enter_lia_mode();
+    void                        enter_bool_mode();
+    bool                        update_inner_best_solution();
+    bool                        update_outer_best_solution();
     //print
     void                        print_formula();
     void                        print_literal(lit &l);
