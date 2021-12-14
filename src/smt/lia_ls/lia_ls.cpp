@@ -1080,9 +1080,33 @@ void ls_solver::add_swap_operation(int &operation_idx){
     lit *l;
     int var_idx;
     int64_t change_value=0;
-    for(int l_idx:cl->literals){
+    for(int l_idx:cl->lia_literals){
         l=&(_lits[std::abs(l_idx)]);
-        if((l->delta>0&&l_idx>0)||(l->delta<=0&&l_idx<0)){//determine a false literal
+        if(l->is_equal){
+            if(l->delta==0&&l_idx<0){
+                for(int var_idx:l->pos_coff_var_idx){
+                    insert_operation(var_idx, 1, operation_idx);
+                    insert_operation(var_idx, -1, operation_idx);
+                }
+                for(int var_idx:l->neg_coff_var_idx){
+                    insert_operation(var_idx, 1, operation_idx);
+                    insert_operation(var_idx, -1, operation_idx);
+                }
+            }//delta should not be 0, while it is 0, so the var should increase 1/-1
+            else if(l->delta!=0&&l_idx>0){
+                for(int j=0;j<l->pos_coff.size();j++){
+                    int var_idx=l->pos_coff_var_idx[j];
+                    if((l->delta%l->pos_coff[j])!=0){continue;}
+                    insert_operation(var_idx, (-l->delta/l->pos_coff[j]), operation_idx);
+                }
+                for(int j=0;j<l->neg_coff.size();j++){
+                    int var_idx=l->neg_coff_var_idx[j];
+                    if((l->delta%l->neg_coff[j])!=0){continue;}
+                    insert_operation(var_idx, (l->delta/l->neg_coff[j]), operation_idx);
+                }
+            }//delta should be 0, while it is not 0, so the var should increase (-delta/coff), while (-delta%coff)==0
+        }
+        else if((l->delta>0&&l_idx>0)||(l->delta<=0&&l_idx<0)){//determine a false literal
             for(int i=0;i<l->neg_coff.size();i++){
                 var_idx=l->neg_coff_var_idx[i];
                 if(l_idx>0){change_value=devide(l->delta, l->neg_coff[i]);}//delta should <=0, while it is now >0, it should enlarge by (-delta/-coff) pos
@@ -1194,12 +1218,19 @@ int ls_solver::critical_score(uint64_t var_idx, int64_t change_value){
 }
 
 void ls_solver::convert_to_pos_delta(int64_t &delta,int l_idx){
-    if(_lits[std::abs(l_idx)].is_lia_lit){
-        if(l_idx<0){delta=1-delta;}
-        if(delta<0){delta=0;}
+    lit * l=&(_lits[std::abs(l_idx)]);
+    if(l->is_lia_lit){
+        if(l->is_equal){
+            if((delta==0&&l_idx>0)||(delta!=0&&l_idx<0)){delta=0;}
+            else{delta=1;}
+        }
+        else{
+            if(l_idx<0){delta=1-delta;}
+            if(delta<0){delta=0;}
+        }
     }
     else{
-        int64_t var_idx=_lits[std::abs(l_idx)].delta;
+        int64_t var_idx=l->delta;
         delta=((_solution[var_idx]>0&&l_idx>0)||(_solution[var_idx]<0&&l_idx<0))?0:1;
     }
 }
