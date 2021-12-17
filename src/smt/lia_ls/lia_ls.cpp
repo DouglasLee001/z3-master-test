@@ -132,6 +132,7 @@ void ls_solver::build_instance(std::vector<std::vector<int> >& clause_vec){
 //    print_formula();
     best_found_cost=(int)_num_clauses;
     make_space();
+    set_pre_value();
 }
 
 uint64_t ls_solver::transfer_name_to_reduced_var(std::string &name, bool is_lia){
@@ -562,6 +563,32 @@ void ls_solver::reduce_clause(){
             is_idl=false;
             break;
         }//var_with most lit are dedicated for IDL
+    }
+}
+
+void ls_solver::set_pre_value(){
+    _pre_value_1.resize(_num_vars+_additional_len, INT32_MAX);
+    _pre_value_2.resize(_num_vars+_additional_len,INT32_MAX);
+    for(clause &cl:_clauses){
+        if(cl.literals.size()==1&&cl.literals[0]>0&&_lits[cl.literals[0]].is_equal){
+            lit *l=&(_lits[cl.literals[0]]);
+            if(l->pos_coff.size()+l->neg_coff.size()==1){
+                if(l->pos_coff.size()==1){_pre_value_1[l->pos_coff_var_idx[0]]=(int)(-l->key/l->pos_coff[0]);}
+                else if(l->neg_coff.size()==1){_pre_value_1[l->neg_coff_var_idx[0]]=(int)(l->key/l->neg_coff[0]);}
+            }
+        }//(a==0)
+        else if(cl.literals.size()==2&&cl.literals[0]>0&&_lits[cl.literals[0]].is_equal&&cl.literals[1]>0&&_lits[cl.literals[1]].is_equal){
+            lit *l1=&(_lits[cl.literals[0]]);
+            lit *l2=&(_lits[cl.literals[1]]);
+            if((l1->pos_coff.size()+l1->neg_coff.size()==1)&&(l2->pos_coff.size()+l2->neg_coff.size()==1)){
+                int var_idx_1=(l1->pos_coff.size()==1)?(l1->pos_coff_var_idx[0]):(l1->neg_coff_var_idx[0]);
+                int var_idx_2=(l2->pos_coff.size()==1)?(l2->pos_coff_var_idx[0]):(l2->neg_coff_var_idx[0]);
+                if(var_idx_1==var_idx_2){
+                    _pre_value_1[var_idx_1]=(l1->pos_coff.size()==1)?((int)(-l1->key/l1->pos_coff[0])):((int)(l1->key/l1->neg_coff[0]));
+                    _pre_value_2[var_idx_1]=(l2->pos_coff.size()==1)?((int)(-l2->key/l2->pos_coff[0])):((int)(l2->key/l2->neg_coff[0]));
+                }
+            }
+        }//(a==0 OR a==1)
     }
 }
 
@@ -1068,7 +1095,11 @@ int64_t ls_solver::devide(int64_t a, int64_t b){
 }
 void ls_solver::insert_operation(int var_idx,int64_t change_value,int &operation_idx){
     int64_t future_solution=_solution[var_idx]+change_value;
-    if(future_solution>=_vars[var_idx].low_bound&&future_solution<=_vars[var_idx].upper_bound){
+    bool no_pre_value=(_pre_value_1[var_idx]==INT32_MAX&&_pre_value_2[var_idx]==INT32_MAX&&future_solution>=_vars[var_idx].low_bound&&future_solution<=_vars[var_idx].upper_bound);
+    bool has_pre_value_1=(_pre_value_1[var_idx]!=INT32_MAX&&_pre_value_2[var_idx]==INT32_MAX&&future_solution==_pre_value_1[var_idx]);
+    bool has_pre_value_2=(_pre_value_1[var_idx]!=INT32_MAX&&_pre_value_2[var_idx]!=INT32_MAX&&(future_solution==_pre_value_1[var_idx]||future_solution==_pre_value_2[var_idx]));
+    if(no_pre_value||has_pre_value_1||has_pre_value_2){
+//    if(future_solution>=_vars[var_idx].low_bound&&future_solution<=_vars[var_idx].upper_bound){
         operation_var_idx_vec[operation_idx]=var_idx;
         operation_change_value_vec[operation_idx++]=change_value;
     }
@@ -1119,6 +1150,92 @@ void ls_solver::add_swap_operation(int &operation_idx){
                 else{change_value=devide(1-l->delta, l->pos_coff[i]);}//delta should >=1, while it is now <=0, it should enlarge by (1-delta/coff) pos
                 insert_operation(var_idx, change_value, operation_idx);//do not consider tabu here
             }
+        }
+    }
+}
+
+//choose a clause with small weight, then choose a random lit, select the operation with greatest score in the lit
+void ls_solver::swap_from_small_weight_clause(){
+    uint64_t min_weight=UINT64_MAX;
+    uint64_t min_weight_clause_idx=0;
+    int best_score=INT32_MIN;
+    int best_operation_var=0;
+    int64_t best_operation_value=0;
+    int score;
+    int64_t value;
+    for(int i=0;i<45;i++){
+        int clause_idx=sat_clause_with_false_literal->element_at(mt()%sat_clause_with_false_literal->size());
+        if(_clauses[clause_idx].weight<min_weight){
+            min_weight=_clauses[clause_idx].weight;
+            min_weight_clause_idx=clause_idx;
+        }
+    }
+    clause *cl=&(_clauses[min_weight_clause_idx]);
+    for(int lit_sign:cl->literals){
+        lit *l=&(_lits[std::abs(lit_sign)]);
+        int64_t pos_delta=l->delta;
+        convert_to_pos_delta(pos_delta, lit_sign);
+        if(pos_delta>0){//determine a false literal
+            if(l->is_equal){
+                if(l->delta==0&&lit_sign<0){
+                    for(int var_idx:l->pos_coff_var_idx){
+                        if(_solution[var_idx]+1<=_vars[var_idx].upper_bound&&_solution[var_idx]+1>=_vars[var_idx].low_bound){
+                            score=critical_score(var_idx, 1);
+                            if(score>best_score){best_score=score;best_operation_var=var_idx;best_operation_value=1;}}
+                        if(_solution[var_idx]-1<=_vars[var_idx].upper_bound&&_solution[var_idx]-1>=_vars[var_idx].low_bound){
+                            score=critical_score(var_idx, -1);
+                            if(score>best_score){best_score=score;best_operation_var=var_idx;best_operation_value=-1;}}
+                    }
+                    for(int var_idx:l->neg_coff_var_idx){
+                        if(_solution[var_idx]+1<=_vars[var_idx].upper_bound&&_solution[var_idx]+1>=_vars[var_idx].low_bound){
+                            score=critical_score(var_idx, 1);
+                            if(score>best_score){best_score=score;best_operation_var=var_idx;best_operation_value=1;}}
+                        if(_solution[var_idx]-1<=_vars[var_idx].upper_bound&&_solution[var_idx]-1>=_vars[var_idx].low_bound){
+                            score=critical_score(var_idx, -1);
+                            if(score>best_score){best_score=score;best_operation_var=var_idx;best_operation_value=-1;}}
+                    }
+                }//delta should not be 0, while it is 0, so the var should increase 1/-1
+                else if(l->delta!=0&&lit_sign>0){
+                    for(int j=0;j<l->pos_coff.size();j++){
+                        int var_idx=l->pos_coff_var_idx[j];
+                        if((l->delta%l->pos_coff[j])!=0){continue;}
+                        value=(-l->delta/l->pos_coff[j]);
+                        if(_solution[var_idx]+value<=_vars[var_idx].upper_bound&&_solution[var_idx]+value>=_vars[var_idx].low_bound){
+                            score=critical_score(var_idx, value);
+                            if(score>best_score){best_score=score;best_operation_var=var_idx;best_operation_value=value;}}
+                    }
+                    for(int j=0;j<l->neg_coff.size();j++){
+                        int var_idx=l->neg_coff_var_idx[j];
+                        if((l->delta%l->neg_coff[j])!=0){continue;}
+                        value=(l->delta/l->neg_coff[j]);
+                        if(_solution[var_idx]+value<=_vars[var_idx].upper_bound&&_solution[var_idx]+value>=_vars[var_idx].low_bound){
+                            score=critical_score(var_idx, value);
+                            if(score>best_score){best_score=score;best_operation_var=var_idx;best_operation_value=value;}}
+                    }
+                }//delta should be 0, while it is not 0, so the var should increase (-delta/coff), while (-delta%coff)==0
+                critical_move(best_operation_var, best_operation_value);
+            }//equal lit
+            else if(l->is_lia_lit){
+                for(int i=0;i<l->neg_coff.size();i++){
+                    int var_idx=l->neg_coff_var_idx[i];
+                    if(lit_sign>0){value=devide(l->delta, l->neg_coff[i]);}//delta should <=0, while it is now >0, it should enlarge by (-delta/-coff) pos
+                    else{value=devide(l->delta-1, l->neg_coff[i]);}//delta should >=1, while it is now <=0, it should enlarge by (1-delta/-coff) neg
+                    if(_solution[var_idx]+value<=_vars[var_idx].upper_bound&&_solution[var_idx]+value>=_vars[var_idx].low_bound){
+                        score=critical_score(var_idx, value);
+                        if(score>best_score){best_score=score;best_operation_var=var_idx;best_operation_value=value;}}
+                }
+                for(int i=0;i<l->pos_coff.size();i++){
+                    int var_idx=l->pos_coff_var_idx[i];
+                    if(lit_sign>0){value=devide(-l->delta,l->pos_coff[i]);}//delta should <=0, while it is now >0, it should enlarge by (-delta/coff) neg
+                    else{value=devide(1-l->delta, l->pos_coff[i]);}//delta should >=1, while it is now <=0, it should enlarge by (1-delta/coff) pos
+                    if(_solution[var_idx]+value<=_vars[var_idx].upper_bound&&_solution[var_idx]+value>=_vars[var_idx].low_bound){
+                        score=critical_score(var_idx, value);
+                        if(score>best_score){best_score=score;best_operation_var=var_idx;best_operation_value=value;}}//do not consider tabu here
+                }
+                critical_move(best_operation_var, best_operation_value);
+            }//a-b+k<=0
+            else {critical_move(l->delta, 0);}//a boolean operation
+            break;
         }
     }
 }
@@ -1540,6 +1657,7 @@ bool ls_solver::local_search(){
             return true;}
         if(_step%1000==0&&(TimeElapsed()>_cutoff)){break;}
         if(no_improve_cnt>500000){initialize();no_improve_cnt=0;}//restart
+        if(mt()%100<99||sat_clause_with_false_literal->size()==0){//only when 1% probabilty and |sat_clauses_with_false_literal| is more than 1, do the swap from small weight
         bool time_up_bool=(no_improve_cnt_bool*_lit_in_unsat_clause_num>5*_bool_lit_in_unsat_clause_num)||(unsat_clauses->size()<=20);
         bool time_up_lia=(no_improve_cnt_lia*_lit_in_unsat_clause_num>20*(_lit_in_unsat_clause_num-_bool_lit_in_unsat_clause_num));
         if((is_in_bool_search&&_bool_lit_in_unsat_clause_num<_lit_in_unsat_clause_num&&time_up_bool)||_bool_lit_in_unsat_clause_num==0){enter_lia_mode();}
@@ -1556,6 +1674,8 @@ bool ls_solver::local_search(){
             if(update_inner_best_solution()) no_improve_cnt_lia=0;
             else                               no_improve_cnt_lia++;
         }
+        }
+        else{swap_from_small_weight_clause();}
         no_improve_cnt=(update_best_solution())?0:(no_improve_cnt+1);
     }
     return false;

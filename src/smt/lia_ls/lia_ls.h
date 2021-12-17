@@ -115,6 +115,8 @@ public:
     std::map<std::string,uint64_t> name2var;//map the name of a variable to its index
     std::map<std::string,uint64_t> name2tmp_var;
     std::map<std::string,uint64_t> name2resolution_var;
+    std::vector<int>            _pre_value_1;//the 1st pre-set value of a var, if the var is in the form of (a==0 OR a==1)
+    std::vector<int>            _pre_value_2;
     // data structure for clause weighting
     const uint64_t              smooth_probability;
     uint64_t                    _swt_threshold;
@@ -146,6 +148,7 @@ public:
     void                        unit_prop();
     void                        resolution();
     void                        reduce_clause();
+    void                        set_pre_value();
     
     //random walk
     void                        update_clause_weight();
@@ -175,6 +178,7 @@ public:
     int64_t                     devide(int64_t a, int64_t b);
     void                        insert_operation(int var_idx,int64_t change_value,int &operation_idx);
     void                        add_swap_operation(int &operation_idx);
+    void                        swap_from_small_weight_clause();
     void                        enter_lia_mode();
     void                        enter_bool_mode();
     bool                        update_inner_best_solution();
