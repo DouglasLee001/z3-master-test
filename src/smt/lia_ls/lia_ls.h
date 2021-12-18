@@ -117,6 +117,7 @@ public:
     std::map<std::string,uint64_t> name2resolution_var;
     std::vector<int>            _pre_value_1;//the 1st pre-set value of a var, if the var is in the form of (a==0 OR a==1)
     std::vector<int>            _pre_value_2;
+    bool                         use_swap_from_from_small_weight;
     // data structure for clause weighting
     const uint64_t              smooth_probability;
     uint64_t                    _swt_threshold;

@@ -133,6 +133,11 @@ void ls_solver::build_instance(std::vector<std::vector<int> >& clause_vec){
     best_found_cost=(int)_num_clauses;
     make_space();
     set_pre_value();
+    int average_lits_num=0;
+    for(int var_idx=0;var_idx<_num_vars;var_idx++){average_lits_num+=_vars[var_idx].literals.size();}
+    average_lits_num/=_num_vars;
+    std::cout<<"average lit num:\n"<<average_lits_num<<"\n";
+    use_swap_from_from_small_weight=(average_lits_num<50);
 }
 
 uint64_t ls_solver::transfer_name_to_reduced_var(std::string &name, bool is_lia){
@@ -1657,7 +1662,7 @@ bool ls_solver::local_search(){
             return true;}
         if(_step%1000==0&&(TimeElapsed()>_cutoff)){break;}
         if(no_improve_cnt>500000){initialize();no_improve_cnt=0;}//restart
-        if(mt()%100<99||sat_clause_with_false_literal->size()==0){//only when 1% probabilty and |sat_clauses_with_false_literal| is more than 1, do the swap from small weight
+        if(!use_swap_from_from_small_weight||mt()%100<99||sat_clause_with_false_literal->size()==0){//only when use_swap and 1% probabilty and |sat_clauses_with_false_literal| is more than 1, do the swap from small weight
         bool time_up_bool=(no_improve_cnt_bool*_lit_in_unsat_clause_num>5*_bool_lit_in_unsat_clause_num)||(unsat_clauses->size()<=20);
         bool time_up_lia=(no_improve_cnt_lia*_lit_in_unsat_clause_num>20*(_lit_in_unsat_clause_num-_bool_lit_in_unsat_clause_num));
         if((is_in_bool_search&&_bool_lit_in_unsat_clause_num<_lit_in_unsat_clause_num&&time_up_bool)||_bool_lit_in_unsat_clause_num==0){enter_lia_mode();}
