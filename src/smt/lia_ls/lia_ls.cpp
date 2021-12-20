@@ -135,7 +135,7 @@ void ls_solver::build_instance(std::vector<std::vector<int> >& clause_vec){
     set_pre_value();
     int average_lits_num=0;
     for(int var_idx=0;var_idx<_num_vars;var_idx++){average_lits_num+=_vars[var_idx].literals.size();}
-    average_lits_num/=_num_vars;
+    average_lits_num/=_num_vars+1;
     std::cout<<"average lit num:\n"<<average_lits_num<<"\n";
     use_swap_from_from_small_weight=(average_lits_num<50);
 }
