@@ -811,6 +811,7 @@ void ls_solver::random_walk(){
         }
     }
     //make move
+    if(operation_idx+operation_idx_bool==0){return;}
     if(operation_idx_bool==0||(operation_idx>0&&operation_idx_bool>0&&mt()%_num_vars<_num_lia_vars)){
         var_idx=operation_var_idx_vec[best_operation_idx];
         change_value=operation_change_value_vec[best_operation_idx];
