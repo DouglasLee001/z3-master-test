@@ -136,7 +136,7 @@ void ls_solver::build_instance(std::vector<std::vector<int> >& clause_vec){
     int average_lits_num=0;
     for(int var_idx=0;var_idx<_num_vars;var_idx++){average_lits_num+=_vars[var_idx].literals.size();}
     average_lits_num/=_num_vars+1;
-    std::cout<<"average lit num:\n"<<average_lits_num<<"\n";
+    // std::cout<<"average lit num:\n"<<average_lits_num<<"\n";
     use_swap_from_from_small_weight=(average_lits_num<50);
 }
 
@@ -1659,7 +1659,7 @@ bool ls_solver::local_search(){
     _outer_layer_step=1;
     for(_step=1;_step<_max_step;_step++){
         if(0==unsat_clauses->size()){
-            check_solution();
+            // check_solution();
             return true;}
         if(_step%1000==0&&(TimeElapsed()>_cutoff)){break;}
         if(no_improve_cnt>500000){initialize();no_improve_cnt=0;}//restart
