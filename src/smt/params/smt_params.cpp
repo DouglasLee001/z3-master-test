@@ -22,6 +22,7 @@ Revision History:
 
 void smt_params::updt_local_params(params_ref const & _p) {
     smt_params_helper p(_p);
+    m_model_on_timeout=p.model_on_timeout();
     m_auto_config = p.auto_config() && gparams::get_value("auto_config") == "true"; // auto-config is not scoped by smt in gparams.
     m_random_seed = p.random_seed();
     m_relevancy_lvl = p.relevancy();

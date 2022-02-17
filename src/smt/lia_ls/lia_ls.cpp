@@ -1313,6 +1313,30 @@ void ls_solver::print_lit_smt(int lit_idx){
     }
 }
 
+void ls_solver::print_mv(){
+    std::cout<<"(model\n";
+    for(uint64_t var_idx=0;var_idx<_num_vars;var_idx++){
+        print_mv_vars(var_idx);
+    }
+    std::cout<<")\n";
+}
+
+void ls_solver::print_mv_vars(uint64_t var_idx){
+    variable *v=&(_vars[var_idx]);
+    int64_t var_solution=_solution[var_idx];
+    std::cout<<"  (define-fun "<<v->var_name<<" () ";
+    if(v->is_lia){
+        std::cout<<"Int ";
+        if(var_solution>=0){std::cout<<var_solution<<")\n";}
+        else{std::cout<<"(- "<<-var_solution<<"))\n";}
+    }
+    else{
+        std::cout<<"Bool ";
+        if(var_solution>0){std::cout<<"true )\n";}
+        else{std::cout<<"false )\n";}
+    }
+}
+
 //calculate score
 int ls_solver::critical_score(uint64_t var_idx, int64_t change_value){
     lit *l;
