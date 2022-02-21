@@ -1337,6 +1337,23 @@ void ls_solver::print_mv_vars(uint64_t var_idx){
     }
 }
 
+int64_t ls_solver::print_var_solution(std::string &var_name){
+    if(name2var.find(var_name)==name2var.end()){var_name="_new_var_"+var_name;}//x-y->z case
+    if(name2var.find(var_name)!=name2var.end()){
+        uint64_t var_idx=name2var[var_name];
+        variable *v=&(_vars[var_idx]);
+        if(v->is_lia){
+            return _solution[var_idx];
+        }//lia case
+        else{
+            return 999;
+        }//bool case
+    }//the var exists
+    else{
+        return 0;
+    }
+}
+
 //calculate score
 int ls_solver::critical_score(uint64_t var_idx, int64_t change_value){
     lit *l;

@@ -193,6 +193,7 @@ public:
     void                        print_lit_smt(int lit_idx);
     void                        print_mv();
     void                        print_mv_vars(uint64_t var_idx);
+    int64_t                     print_var_solution(std::string &var_name);
     //calculate score
     int                         critical_score(uint64_t var_idx,int64_t change_value);
     int64_t                     critical_subscore(uint64_t var_idx,int64_t change_value);
