@@ -188,8 +188,8 @@ void ls_solver::reduce_vars(){
     const uint64_t tmp_vars_size=_tmp_vars.size();
     std::vector<int> hash_map(tmp_vars_size*tmp_vars_size,0);//hash_map[A*(size)+b]=n means A-B has occurred n times
     std::vector<int> occur_time(tmp_vars_size,0);//occur_time[a]=n means that a has occured in lits for n times
-    Array *pair_x=new Array((int)tmp_vars_size);
-    Array *pair_y=new Array((int)tmp_vars_size);
+    pair_x=new Array((int)tmp_vars_size);
+    pair_y=new Array((int)tmp_vars_size);
     lit *l;
     variable * original_var;
     variable * new_var;
@@ -1338,8 +1338,19 @@ void ls_solver::print_mv_vars(uint64_t var_idx){
 }
 
 int64_t ls_solver::print_var_solution(std::string &var_name){
-    if(name2var.find(var_name)==name2var.end()){var_name="_new_var_"+var_name;}//x-y->z case
-    if(name2var.find(var_name)!=name2var.end()){
+    uint64_t var_idx=0;
+    int origin_var_idx=(int)name2tmp_var[var_name];
+    if(pair_x->is_in_array(origin_var_idx)){//x-y=x case x
+        var_name="_new_var_"+var_name;
+        var_idx=name2var[var_name];
+        return (_solution[var_idx]>=0)?_solution[var_idx]:0;
+    }
+    else if(pair_y->is_in_array(origin_var_idx)){//x-y=z case y
+        var_name="_new_var_"+_tmp_vars[pair_x->element_at(pair_y->index_of(origin_var_idx))].var_name;
+        var_idx=name2var[var_name];
+        return _solution[var_idx]>=0?0:-_solution[var_idx];
+    }
+    else if(name2var.find(var_name)!=name2var.end()){
         uint64_t var_idx=name2var[var_name];
         variable *v=&(_vars[var_idx]);
         if(v->is_lia){

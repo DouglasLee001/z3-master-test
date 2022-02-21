@@ -82,6 +82,8 @@ public:
     Array                       *sat_clause_with_false_literal;//clauses with 0<sat_num<literal_num, from which swap operation are choosen
     Array                       *contain_bool_unsat_clauses;//unsat clause with at least one boolean var
     Array                       *lit_occur;//the lit containing the lia var in one single clause
+    Array                       *pair_x;//x-y-->z
+    Array                       *pair_y;
     int                         lia_var_idx_with_most_lits;
     bool                        use_pbs=false;
     bool                        is_idl=true;//if it is the IDL mode
