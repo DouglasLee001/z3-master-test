@@ -3677,14 +3677,14 @@ namespace smt {
             m_lia_ls_solver->local_search();
             // std::cout<<"local search best:\n"<<m_lia_ls_solver->best_found_cost<<"\n";
             if(m_lia_ls_solver->best_found_cost==0){
-                std::cout<<"sat\n";
+                // std::cout<<"sat\n";
                 if(m_fparams.m_model_on_timeout){m_lia_ls_solver->print_mv();}
                 // std::exit(0);
             }
             m_model_generator->reset();
             m_proto_model = m_model_generator->mk_model_ls(m_lia_ls_solver);//此处先影响m_proto_model再影响m_model,这里会调用model_generator的mk_model中带有local search的部分
-            model_pp(std::cout, *m_proto_model);
-            std::cout << "END_OF_MODEL3 before search\n";
+            // model_pp(std::cout, *m_proto_model);
+            // std::cout << "END_OF_MODEL3 before search\n";
             return check_finalize(l_true);
         }
     }
