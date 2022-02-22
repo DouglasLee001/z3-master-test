@@ -18,19 +18,19 @@
 #include "smt/lia_ls/lia_Array.h"
 
 namespace lia {
-const int64_t max_int=9223372036854775800;
+const __int128_t max_int=__int128_t(INT64_MAX)*__int128_t(INT64_MAX);
 //one arith lit is in the form of a_1*x_1+...+a_n*x_n+k<=0, the cofficient are divided into positive ones and negative ones, the coff are positive.
 //if neg_coff =1 neg_coff_var=x pos_coff=1 pos_coff_var=y means y-x
 //if is_lia_lit: \sum coff*var_idx<=key
 //else:_vars[delta] 
 struct lit{
     std::vector<int>            pos_coff_var_idx;
-    std::vector<int64_t>        pos_coff;
+    std::vector<__int128_t>        pos_coff;
     std::vector<int>            neg_coff_var_idx;
-    std::vector<int64_t>        neg_coff;
-    int64_t                     key;
+    std::vector<__int128_t>        neg_coff;
+    __int128_t                     key;
     int                         lits_index;
-    int64_t                     delta;//the current value of left side
+    __int128_t                     delta;//the current value of left side
     bool                        is_equal=false;//true means a-b-k==0, else a-b-k<=0
     bool                        is_lia_lit=false;
 };
@@ -38,11 +38,11 @@ struct lit{
 struct variable{
     std::vector<int>            literals;//literals[i]=l means the ith literal of the var is the pos(neg) of lth of _lits, it can be negative
     std::vector<int>            literal_clause;//literal_clause[i]=c means the ith literal containing the var is in cth clause
-    std::vector<int64_t>            literal_coff;//literal_coff[i] denotes the coff of the var in corresponding literal, it can be negative
+    std::vector<__int128_t>            literal_coff;//literal_coff[i] denotes the coff of the var in corresponding literal, it can be negative
     std::vector<uint64_t>       clause_idxs;
     std::string                 var_name;
-    int64_t                         low_bound=-max_int;
-    int64_t                         upper_bound=max_int;
+    __int128_t                         low_bound=-max_int;
+    __int128_t                         upper_bound=max_int;
     bool                        is_lia;
     bool                        is_delete=false;
     int                         score;//if it is a bool var, then the score is calculated beforehand
@@ -54,7 +54,7 @@ struct clause{
     std::vector<int>             bool_literals;
     int                          weight=1;
     int                          sat_count;
-    int64_t                      min_delta;//a positive value, the distance from sat, delta for pos lit, 1-delta for neg lit
+    __int128_t                      min_delta;//a positive value, the distance from sat, delta for pos lit, 1-delta for neg lit
     int                          min_delta_lit_index;//the lit index with the min_delta
     bool                         is_delete=false;
 };
@@ -88,8 +88,8 @@ public:
     bool                        use_pbs=false;
     bool                        is_idl=true;//if it is the IDL mode
     //solution
-    std::vector<int64_t>       _solution;
-    std::vector<int64_t>       _best_solutin;
+    std::vector<__int128_t>       _solution;
+    std::vector<__int128_t>       _best_solutin;
     int                         best_found_cost;
     int                         best_found_this_restart;
     int                         no_improve_cnt_bool=0;
@@ -107,7 +107,7 @@ public:
     int                          CC_mode;
     std::vector<uint64_t>       last_move;
     std::vector<int>            operation_var_idx_vec;
-    std::vector<int64_t>        operation_change_value_vec;
+    std::vector<__int128_t>        operation_change_value_vec;
     std::vector<int>             operation_var_idx_bool_vec;
     std::chrono::steady_clock::time_point start;
     double                      best_cost_time;
@@ -160,26 +160,26 @@ public:
     
     //construction
     void                        construct_slution_score();//construct the solution based on score
-    uint64_t                    pick_construct_idx(int64_t &best_value);
-    void                        construct_move(uint64_t var_idx,int64_t change_value);
-    int                         construct_score(uint64_t var_idx,int64_t change_value);
+    uint64_t                    pick_construct_idx(__int128_t &best_value);
+    void                        construct_move(uint64_t var_idx,__int128_t change_value);
+    int                         construct_score(uint64_t var_idx,__int128_t change_value);
     
     //basic operations
     inline void                 sat_a_clause(uint64_t clause_idx){unsat_clauses->delete_element((int)clause_idx);contain_bool_unsat_clauses->delete_element((int)clause_idx);};
     inline void                 unsat_a_clause(uint64_t clause_idx){unsat_clauses->insert_element((int)clause_idx);
                                  if(_clauses[clause_idx].bool_literals.size()>0)contain_bool_unsat_clauses->insert_element((int)clause_idx);};
-    void                        convert_to_pos_delta(int64_t &delta,int l_idx);
+    void                        convert_to_pos_delta(__int128_t &delta,int l_idx);
     bool                        update_best_solution();
     void                        modify_CC(uint64_t var_idx,int direction);
-    int                         pick_critical_move(int64_t &best_value);
+    int                         pick_critical_move(__int128_t &best_value);
     int                         pick_critical_move_bool();
-    void                        critical_move(uint64_t var_idx,int64_t change_value);
+    void                        critical_move(uint64_t var_idx,__int128_t change_value);
     void                        invert_lit(lit &l);
-    int64_t                     delta_lit(lit &l);
+    __int128_t                     delta_lit(lit &l);
     double                      TimeElapsed();
     void                        clear_prev_data();
-    int64_t                     devide(int64_t a, int64_t b);
-    void                        insert_operation(int var_idx,int64_t change_value,int &operation_idx);
+    __int128_t                     devide(__int128_t a, __int128_t b);
+    void                        insert_operation(int var_idx,__int128_t change_value,int &operation_idx);
     void                        add_swap_operation(int &operation_idx);
     void                        swap_from_small_weight_clause();
     void                        enter_lia_mode();
@@ -195,15 +195,17 @@ public:
     void                        print_lit_smt(int lit_idx);
     void                        print_mv();
     void                        print_mv_vars(uint64_t var_idx);
-    int64_t                     print_var_solution(std::string &var_name);
+    void                        print_var_solution(std::string &var_name,std::string &var_value);
     //calculate score
-    int                         critical_score(uint64_t var_idx,int64_t change_value);
-    int64_t                     critical_subscore(uint64_t var_idx,int64_t change_value);
-    void                        critical_score_subscore(uint64_t var_idx,int64_t change_value);
+    int                         critical_score(uint64_t var_idx,__int128_t change_value);
+    __int128_t                     critical_subscore(uint64_t var_idx,__int128_t change_value);
+    void                        critical_score_subscore(uint64_t var_idx,__int128_t change_value);
     void                        critical_score_subscore(uint64_t var_idx);//dedicated for boolean var
     //check
     bool                        check_solution();
-
+    //handle 128
+    inline __int128_t           abs_128(__int128_t n){return n>=0?n:-n;}
+    std::string                 print_128(__int128 n);
     //local search
     bool                        local_search();
 };

@@ -391,8 +391,9 @@ namespace smt {
                             std::stringstream var_name_stream;
                             var_name_stream<<mk_pp(r->get_expr(),m);
                             std::string var_name=var_name_stream.str();
-                            int64_t var_value=solver->print_var_solution(var_name);
-                            num=rational(var_value,rational::i64()).get_rational();
+                            std::string var_value;
+                            solver->print_var_solution(var_name,var_value);
+                            num=rational(var_value.c_str()).get_rational();
                             val=a_fac.mk_num_value(num,true);//只要在此处将val赋值便可以了
                         }
                     }
