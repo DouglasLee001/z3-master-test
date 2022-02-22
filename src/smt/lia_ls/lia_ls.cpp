@@ -1339,6 +1339,10 @@ void ls_solver::print_mv_vars(uint64_t var_idx){
 
 int64_t ls_solver::print_var_solution(std::string &var_name){
     uint64_t var_idx=0;
+    if(name2tmp_var.find(var_name)==name2tmp_var.end()){
+        return 0;
+    }//Bool case: since the Bool var will directly enter resolution var
+    //LIA case follows
     int origin_var_idx=(int)name2tmp_var[var_name];
     if(pair_x->is_in_array(origin_var_idx)){//x-y=x case x
         var_name="_new_var_"+var_name;
@@ -1352,17 +1356,11 @@ int64_t ls_solver::print_var_solution(std::string &var_name){
     }
     else if(name2var.find(var_name)!=name2var.end()){
         uint64_t var_idx=name2var[var_name];
-        variable *v=&(_vars[var_idx]);
-        if(v->is_lia){
-            return _solution[var_idx];
-        }//lia case
-        else{
-            return 999;
-        }//bool case
-    }//the var exists
+        return _solution[var_idx];
+    }//the var exists in _vars
     else{
-        return 0;
-    }
+        return _tmp_vars[origin_var_idx].low_bound;
+    }//the var does not exist in reduced formula
 }
 
 //calculate score

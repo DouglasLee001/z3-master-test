@@ -3653,7 +3653,6 @@ namespace smt {
             // if(use_ls){
                 expr_bool_var_map();
             //     m_ls_solver->build_instance(clauses_vec);
-            m_lia_ls_solver->build_instance(clauses_vec);
             //     m_ls_solver->local_search();
             //     std::cout<<"local search best:\n"<<m_ls_solver->_best_found_hard_cost<<"\n";
             //     if(m_ls_solver->_best_found_hard_cost==0){std::cout<<"local search sat\n"<<m_timer.get_seconds()<<"\n";return l_true;}
@@ -3671,6 +3670,7 @@ namespace smt {
             // std::cout<<"clause num:"<<m_ls_solver->_num_clauses<<"\n"<<"bool var num:"<<m_ls_solver->_num_bool_vars<<"\n";
             // m_ls_solver->print_formula();
 #endif
+            m_lia_ls_solver->build_instance(clauses_vec);
             // m_lia_ls_solver->print_formula();
             // m_lia_ls_solver->print_formula_pbs();
             // m_lia_ls_solver->print_formula_smt();
