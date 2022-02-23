@@ -1338,6 +1338,27 @@ void ls_solver::print_mv_vars(uint64_t var_idx){
     }
 }
 
+void ls_solver::choose_value_for_pair(){
+    pair_x_value.reserve(pair_x->size());
+    pair_y_value.reserve(pair_x->size());
+    variable *original_var_x;
+    variable *original_var_y;
+    __int128_t z_value,upper,lower,upper_y,lower_y,new_x_value;
+    for(int pair_idx=0;pair_idx<pair_x->size();pair_idx++){
+        original_var_x=&(_tmp_vars[pair_x->element_at(pair_idx)]);
+        original_var_y=&(_tmp_vars[pair_y->element_at(pair_idx)]);
+        z_value=_solution[name2var["_new_var_"+original_var_x->var_name]];
+        upper_y=(original_var_y->upper_bound==max_int)?max_int:(original_var_y->upper_bound+z_value);
+        lower_y=(original_var_y->low_bound==-max_int)?(-max_int):(original_var_y->low_bound+z_value);
+        upper=(original_var_x->upper_bound<upper_y)?original_var_x->upper_bound:upper_y;
+        lower=(original_var_x->low_bound>lower_y)?original_var_x->low_bound:lower_y;
+        if(upper!=max_int){new_x_value=upper;}
+        else if(lower!=-max_int){new_x_value=lower;}
+        else{new_x_value=0;}
+        pair_x_value.push_back(new_x_value);
+        pair_y_value.push_back(new_x_value+z_value);
+    }
+}
 void ls_solver::print_var_solution(std::string &var_name,std::string & var_value){
     uint64_t var_idx=0;
     if(name2tmp_var.find(var_name)==name2tmp_var.end()){
@@ -1347,15 +1368,11 @@ void ls_solver::print_var_solution(std::string &var_name,std::string & var_value
     //LIA case follows
     int origin_var_idx=(int)name2tmp_var[var_name];
     if(pair_x->is_in_array(origin_var_idx)){//x-y=x case x
-        var_name="_new_var_"+var_name;
-        var_idx=name2var[var_name];
-        var_value=print_128((_solution[var_idx]>=0)?_solution[var_idx]:0);
+        var_value=print_128(pair_x_value[pair_x->element_at(origin_var_idx)]);
         return;
     }
     else if(pair_y->is_in_array(origin_var_idx)){//x-y=z case y
-        var_name="_new_var_"+_tmp_vars[pair_x->element_at(pair_y->index_of(origin_var_idx))].var_name;
-        var_idx=name2var[var_name];
-        var_value=print_128(_solution[var_idx]>=0?0:-_solution[var_idx]);
+        var_value=print_128(pair_y_value[pair_y->element_at(origin_var_idx)]);
         return;
     }
     else if(name2var.find(var_name)!=name2var.end()){
@@ -1715,6 +1732,7 @@ bool ls_solver::local_search(){
     _outer_layer_step=1;
     for(_step=1;_step<_max_step;_step++){
         if(0==unsat_clauses->size()){
+            choose_value_for_pair();
             // check_solution();
             return true;}
         if(_step%1000==0&&(TimeElapsed()>_cutoff)){break;}

@@ -84,6 +84,8 @@ public:
     Array                       *lit_occur;//the lit containing the lia var in one single clause
     Array                       *pair_x;//x-y-->z
     Array                       *pair_y;
+    std::vector<__int128_t>    pair_x_value;
+    std::vector<__int128_t>     pair_y_value;
     int                         lia_var_idx_with_most_lits;
     bool                        use_pbs=false;
     bool                        is_idl=true;//if it is the IDL mode
@@ -196,6 +198,7 @@ public:
     void                        print_mv();
     void                        print_mv_vars(uint64_t var_idx);
     void                        print_var_solution(std::string &var_name,std::string &var_value);
+    void                        choose_value_for_pair();//dedicated for x-y=z, choose a value for x
     //calculate score
     int                         critical_score(uint64_t var_idx,__int128_t change_value);
     __int128_t                     critical_subscore(uint64_t var_idx,__int128_t change_value);
