@@ -1356,7 +1356,7 @@ void ls_solver::choose_value_for_pair(){
         else if(lower!=-max_int){new_x_value=lower;}
         else{new_x_value=0;}
         pair_x_value.push_back(new_x_value);
-        pair_y_value.push_back(new_x_value+z_value);
+        pair_y_value.push_back(new_x_value-z_value);//x-y=z  x=y+z  x [0,inf) y+z [-1,inf)-->x \wedge y+z [0,inf) -->x=0--> y=x-z
     }
 }
 void ls_solver::print_var_solution(std::string &var_name,std::string & var_value){
@@ -1368,11 +1368,11 @@ void ls_solver::print_var_solution(std::string &var_name,std::string & var_value
     //LIA case follows
     int origin_var_idx=(int)name2tmp_var[var_name];
     if(pair_x->is_in_array(origin_var_idx)){//x-y=x case x
-        var_value=print_128(pair_x_value[pair_x->element_at(origin_var_idx)]);
+        var_value=print_128(pair_x_value[pair_x->index_of(origin_var_idx)]);
         return;
     }
     else if(pair_y->is_in_array(origin_var_idx)){//x-y=z case y
-        var_value=print_128(pair_y_value[pair_y->element_at(origin_var_idx)]);
+        var_value=print_128(pair_y_value[pair_y->index_of(origin_var_idx)]);
         return;
     }
     else if(name2var.find(var_name)!=name2var.end()){
