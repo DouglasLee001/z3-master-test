@@ -81,7 +81,7 @@ static tactic * mk_qfnia_preamble(ast_manager & m, params_ref const & p_ref) {
 			     mk_card2bv_tactic(m, p_ref),
                  skip_if_failed(using_params(mk_cofactor_term_ite_tactic(m), elim_p)));
 }
-
+//将nia转为bv，用sat求解
 static tactic * mk_qfnia_sat_solver(ast_manager & m, params_ref const & p) {
     params_ref nia2sat_p = p;
     nia2sat_p.set_uint("nla2bv_max_bv_size", 64);  
@@ -93,7 +93,7 @@ static tactic * mk_qfnia_sat_solver(ast_manager & m, params_ref const & p) {
                     skip_if_failed(mk_qfnia_bv_solver(m, p)),
                     mk_fail_if_undecided_tactic());
 }
-
+//转到NLSAT求解
 static tactic * mk_qfnia_nlsat_solver(ast_manager & m, params_ref const & p) {
     params_ref nia2sat_p = p;
     nia2sat_p.set_uint("nla2bv_max_bv_size", 64);  
@@ -118,11 +118,11 @@ tactic * mk_qfnia_tactic(ast_manager & m, params_ref const & p) {
     return and_then(
         mk_report_verbose_tactic("(qfnia-tactic)", 10),
         mk_qfnia_preamble(m, p),
-        or_else(mk_qfnia_sat_solver(m, p),
-                 try_for(mk_qfnia_smt_solver(m, p), 2000),
-                 mk_qfnia_nlsat_solver(m, p),        
+        // or_else(mk_qfnia_sat_solver(m, p),
+        //          try_for(mk_qfnia_smt_solver(m, p), 2000),
+        //          mk_qfnia_nlsat_solver(m, p),        
                  mk_qfnia_smt_solver(m, p))
-                    )
+                    // )
         ;
 }
 

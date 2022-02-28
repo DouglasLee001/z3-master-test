@@ -332,12 +332,13 @@ namespace smt {
         std::string myString;
         if (!m_b_internalized_stack.empty()) {
             uint64_t sz = m_b_internalized_stack.size();
-#ifdef IDL_DEBUG
+#ifdef NIDL_DEBUG
         std::cout<<sz<<"\n";
 #endif
             // m_ls_solver->make_lits_space(sz);//构造lits的空间
             m_lia_ls_solver->make_lits_space(sz);
             int new_var_num=0;
+            int if_var_num=0;
             for (uint64_t i = 0; i < sz; i++) {
                 expr *  n  = m_b_internalized_stack.get(i);
                 bool_var v = get_bool_var_of_id(n->get_id());
@@ -366,9 +367,35 @@ namespace smt {
                     clauses_vec.push_back(clause_tmp);
                     ss << "or new_var"<<new_var_num++;
                 }
+                else if(to_app(n)->get_decl()->get_name()=="if"){
+                    expr *if_term_a=to_app(n)->get_arg(0);
+                    expr *if_term_b=to_app(n)->get_arg(1);
+                    expr *if_term_c=to_app(n)->get_arg(2);
+                    bool_var A,a,b,c;
+                    if(to_app(if_term_a)->get_decl()->get_name()=="not"){a=-get_bool_var_of_id(to_app(if_term_a)->get_arg(0)->get_id());}else{a=get_bool_var_of_id(if_term_a->get_id());}
+                    if(to_app(if_term_b)->get_decl()->get_name()=="not"){b=-get_bool_var_of_id(to_app(if_term_b)->get_arg(0)->get_id());}else{b=get_bool_var_of_id(if_term_b->get_id());}
+                    if(to_app(if_term_c)->get_decl()->get_name()=="not"){c=-get_bool_var_of_id(to_app(if_term_c)->get_arg(0)->get_id());}else{c=get_bool_var_of_id(if_term_c->get_id());}
+                    A=l_curr.var();
+                    std::vector<int> clause_tmp;
+                    clause_tmp.push_back(-A);clause_tmp.push_back(-a);clause_tmp.push_back(b);//-A or -a or b
+                    clauses_vec.push_back(clause_tmp);
+                    clause_tmp.clear();
+                    clause_tmp.push_back(-A);clause_tmp.push_back(a);clause_tmp.push_back(c);//-A or a or c
+                    clauses_vec.push_back(clause_tmp);
+                    clause_tmp.clear();
+                    clause_tmp.push_back(A);clause_tmp.push_back(-a);clause_tmp.push_back(-b);//A or -a or -b
+                    clauses_vec.push_back(clause_tmp);
+                    clause_tmp.clear();
+                    clause_tmp.push_back(A);clause_tmp.push_back(a);clause_tmp.push_back(-c);//A or a or -c
+                    clauses_vec.push_back(clause_tmp);
+                    clause_tmp.clear();
+                    clause_tmp.push_back(A);clause_tmp.push_back(-b);clause_tmp.push_back(-c);//A or -b or -c
+                    clauses_vec.push_back(clause_tmp);
+                    ss<<"if if_var"<<if_var_num++;
+                }
                 else{l_curr.display(ss,m,m_bool_var2expr.c_ptr());}//将布尔变量对应的表达式存放在string中
                 myString=ss.str();
-#ifdef IDL_DEBUG
+#ifdef NIDL_DEBUG
                 std::cout<<myString<<"\n";
 #endif
                 // m_ls_solver->build_lits(myString);//输入lits
