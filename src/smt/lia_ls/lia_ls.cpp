@@ -393,7 +393,7 @@ void ls_solver::resolution(){
             uint64_t clause_idx=_resolution_vars[bool_var_idx].clause_idxs[i];
             if(_clauses[clause_idx].is_delete)continue;
             for(int l_var_sign:_clauses[clause_idx].literals){
-                if(_lits[std::abs(l_var_sign)].delta==bool_var_idx){
+                if(!_lits[std::abs(l_var_sign)].is_lia_lit&&_lits[std::abs(l_var_sign)].delta==bool_var_idx){//make sure that it is a boolean literal and is exactly the one containing the var
                     if(l_var_sign>0){pos_clauses[pos_clause_size++]=clause_idx;}
                     else{neg_clauses[neg_clause_size++]=clause_idx;}
                     break;
@@ -407,7 +407,7 @@ void ls_solver::resolution(){
                 uint64_t neg_clause_idx=neg_clauses[j];
                 for(int k=0;k<_clauses[neg_clause_idx].literals.size();k++){
                     int l_neg_lit=_clauses[neg_clause_idx].literals[k];
-                    if(_lits[std::abs(l_neg_lit)].delta!=bool_var_idx){//the bool_var for resolution is not considered
+                    if(_lits[std::abs(l_neg_lit)].delta!=bool_var_idx||_lits[std::abs(l_neg_lit)].is_lia_lit){//the bool_var for resolution is not considered(that is \neg ( the lit is bool lit and it contains the var))
                         for(int l_pos_lit:_clauses[pos_clause_idx].literals){
                             if(-l_neg_lit==(l_pos_lit)){
                                 tautology_num++;
