@@ -323,8 +323,8 @@ int ls_solver::critical_score(uint64_t var_idx, __int128_t change_value){
     variable * var=&(_vars[var_idx]);
     var_lit_term *vlt;
     uint64_t curr_lit_idx=var->var_lit_terms[0].lit_idx;
-    int curr_lit_delta_new=_lits[curr_lit_idx].delta;
-    int coff;//(coff of original term) * (term_value / _solution[var]) ( 2 * x1*x2 ) x1=3, x2=4  -> coff[x2]=2*3
+    __int128_t curr_lit_delta_new=_lits[curr_lit_idx].delta;
+    __int128_t coff;//(coff of original term) * (term_value / _solution[var]) ( 2 * x1*x2 ) x1=3, x2=4  -> coff[x2]=2*3
     for(uint64_t term_idx:var->term_idxs){term_coffs[term_idx]=coff_in_term(var_idx, term_idx);}//determine the term coff
     //determine the lit_make_break by going through the vlt of var
     for(int vlt_idx=0;vlt_idx<var->var_lit_terms.size();vlt_idx++){
@@ -365,8 +365,8 @@ void ls_solver::move_update(uint64_t var_idx, __int128_t change_value){
     variable *var=&(_vars[var_idx]);
     var_lit_term *vlt;
     uint64_t curr_lit_idx=var->var_lit_terms[0].lit_idx;
-    int curr_lit_delta_new=_lits[curr_lit_idx].delta;
-    int term_coff,lit_coff;
+    __int128_t curr_lit_delta_new=_lits[curr_lit_idx].delta;
+    __int128_t term_coff,lit_coff;
     //update term value
     for(uint64_t term_idx:var->term_idxs){
         term_coff=coff_in_term(var_idx, term_idx);
@@ -514,17 +514,23 @@ bool ls_solver::check_solution(){
     int unsat_num=0;
     for(int term_idx=0;term_idx<_terms.size();term_idx++){
         term *t=&(_terms[term_idx]);
-        t->value=1;
+        __int128_t new_term_value=1;
         for(var_exp &ve:t->var_epxs){
-            t->value*=_solution[ve.var_index];
-            if(t->value==0){break;}
+            new_term_value*=_solution[ve.var_index];
+            if(new_term_value==0){break;}
         }
-    }//calculate the term value again
+        if(new_term_value!=_terms[term_idx].value){std::cout<<"term value wrong: "<<term_idx<<"\n";}
+    }//check term value
+    for(int lit_idx=0;lit_idx<_lits.size();lit_idx++){
+        if(_lits[lit_idx].lits_index==0||!_lits[lit_idx].is_nia_lit){continue;}
+        __int128_t delta=delta_lit(_lits[lit_idx]);
+        if(delta!=_lits[lit_idx].delta){std::cout<<"lit delta wrong: "<<lit_idx<<"\n";}
+    }//check lit delta
     for(uint64_t i=0;i<_num_clauses;i++){
         int sat_count=0;
         cp=&(_clauses[i]);
         for(int lit_idx: cp->literals){
-            __int128_t delta=delta_lit(_lits[std::abs(lit_idx)]);
+            __int128_t delta=_lits[std::abs(lit_idx)].delta;
             bool is_equal=_lits[std::abs(lit_idx)].is_equal;
             if(!_lits[std::abs(lit_idx)].is_nia_lit){
                 __int128_t var_idx=_lits[std::abs(lit_idx)].delta;

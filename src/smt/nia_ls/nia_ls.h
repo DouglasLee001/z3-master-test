@@ -99,7 +99,7 @@ public:
     std::vector<variable>        _resolution_vars;
     std::vector<int>            nia_var_vec;
     std::vector<int>            bool_var_vec;
-    std::vector<int>            term_coffs;//given a current var, the term_coff[t] means the term_coff of var in term t
+    std::vector<__int128_t>     term_coffs;//given a current var, the term_coff[t] means the term_coff of var in term t
     std::vector<term>           _terms;
     std::vector<lit>            _lits;
     std::vector<int>            _lit_make_break;//making a move will make or break the lit itself (1:make, -1:break, 0:no change)
