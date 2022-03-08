@@ -98,4 +98,5 @@ z3_add_component(smt
     substitution
     idl_ls
     lia_ls
+    nia_ls
 )
