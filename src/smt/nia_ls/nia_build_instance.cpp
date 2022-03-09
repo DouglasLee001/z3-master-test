@@ -349,10 +349,24 @@ void ls_solver::unit_prop(){
         }
     }
 }
+int ls_solver::hash_lits_to_num(std::vector<int> &lits){
+    std::sort(lits.begin(), lits.end());
+    int hash_num=0;
+    for(int lit_idx:lits){
+        hash_num=hash_num*(int)(_num_lits)+lit_idx+(int)_num_lits;
+    }
+    return hash_num;
+}
 
 void ls_solver::resolution(){
     std::vector<uint64_t> pos_clauses(10*_num_clauses);
     std::vector<uint64_t> neg_clauses(10*_num_clauses);
+    std::map<int,int>  clauselit_map;//for the clause with literal {a,b,c}, sort the lit by its order, and hash the literals to a number, then map it to the clause_idx, if deleted, set it to -1
+    std::vector<int>    clauselit(_clauses.size());//hash the lits of clause to a number
+    for(int cls_idx=0;cls_idx<_clauses.size();cls_idx++){
+        clauselit[cls_idx]=hash_lits_to_num(_clauses[cls_idx].literals);
+        clauselit_map[clauselit[cls_idx]]=cls_idx;
+    }
     int pos_clause_size,neg_clause_size;
     bool is_improve=true;
     while(is_improve){
@@ -392,6 +406,7 @@ void ls_solver::resolution(){
         if((pos_clause_size*neg_clause_size-tautology_num)>(pos_clause_size+neg_clause_size)){continue;}//if deleting the var can cause 2 times clauses, then skip it
         for(uint64_t clause_idx:_resolution_vars[bool_var_idx].clause_idxs){//delete the clauses of bool_var
             _clauses[clause_idx].is_delete=true;
+            clauselit_map[clauselit[clause_idx]]=-1;//delete the clause, set the map to -1
             for(int l_idx_sign:_clauses[clause_idx].literals){//delete the clause from corresponding bool var
                 lit *l=&(_lits[std::abs(l_idx_sign)]);
                 if(!l->is_nia_lit&&l->delta!=bool_var_idx){
@@ -434,7 +449,8 @@ void ls_solver::resolution(){
                         if(!is_existed_lit){new_clause.literals.push_back(l_sign_idx);}
                     }
                 }
-                if(!is_tautology){//add new clause, and modify the clause of corresponding bool var
+                int clause_lit_hash=hash_lits_to_num(new_clause.literals);
+                if(!is_tautology&&(clauselit_map.find(clause_lit_hash)==clauselit_map.end()||clauselit_map[clause_lit_hash]==-1)){//add new clause, and modify the clause of corresponding bool var
                     for(int l_sign_idx:new_clause.literals){
                         lit *l_inner=&(_lits[std::abs(l_sign_idx)]);
                         if(!l_inner->is_nia_lit){
@@ -442,6 +458,8 @@ void ls_solver::resolution(){
                         }
                     }
                     _clauses.push_back(new_clause);
+                    clauselit.push_back(clause_lit_hash);
+                    clauselit_map[clause_lit_hash]=(int)_num_clauses;
                     _num_clauses++;
                 }
             }
