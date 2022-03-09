@@ -176,7 +176,7 @@ public:
     void                        initialize_clause_datas();
     void                        unit_prop();
     void                        resolution();
-    int                         hash_lits_to_num(std::vector<int> &lits);
+    __int128_t                  hash_lits_to_num(std::vector<int> &lits);
     void                        reduce_clause();
     void                        set_pre_value();
     
