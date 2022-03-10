@@ -19,7 +19,7 @@
 #include <algorithm>
 
 namespace nia {
-const __int128_t max_int=__int128_t(INT64_MAX)*__int128_t(INT64_MAX);
+const __int128_t max_int=__int128_t(INT32_MAX)*__int128_t(INT64_MAX);
 //the var_index=1(_vars[1]=x), exponent=2: x^2
 struct var_exp{
     int var_index;
