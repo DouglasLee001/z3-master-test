@@ -99,7 +99,7 @@ namespace smt {
         m_searching(false) {
         // m_ls_solver=new boolidl::bool_ls_solver((int)m_fparams.m_random_seed);
         // m_lia_ls_solver=new lia::ls_solver((int)m_fparams.m_random_seed);
-        m_nia_ls_solver=new nia::ls_solver(0);
+        m_nia_ls_solver=new nia::ls_solver((int)m_fparams.m_random_seed);
         SASSERT(m_scope_lvl == 0);
         SASSERT(m_base_lvl == 0);
         SASSERT(m_search_lvl == 0);

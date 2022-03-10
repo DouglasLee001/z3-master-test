@@ -1742,7 +1742,7 @@ bool ls_solver::local_search(){
         bool time_up_bool=(no_improve_cnt_bool*_lit_in_unsat_clause_num>5*_bool_lit_in_unsat_clause_num)||(unsat_clauses->size()<=20);
         bool time_up_lia=(no_improve_cnt_lia*_lit_in_unsat_clause_num>20*(_lit_in_unsat_clause_num-_bool_lit_in_unsat_clause_num));
         if((is_in_bool_search&&_bool_lit_in_unsat_clause_num<_lit_in_unsat_clause_num&&time_up_bool)||_bool_lit_in_unsat_clause_num==0){enter_lia_mode();}
-        if((!is_in_bool_search&&_bool_lit_in_unsat_clause_num>0&&time_up_lia)||(_lit_in_unsat_clause_num==_bool_lit_in_unsat_clause_num)){enter_bool_mode();}
+        else if((!is_in_bool_search&&_bool_lit_in_unsat_clause_num>0&&time_up_lia)||(_lit_in_unsat_clause_num==_bool_lit_in_unsat_clause_num)){enter_bool_mode();}
         if(is_in_bool_search){
             flipv=pick_critical_move_bool();
             if(flipv!=-1){critical_move(flipv, change_value);}
