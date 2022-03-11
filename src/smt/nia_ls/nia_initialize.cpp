@@ -44,10 +44,26 @@ void ls_solver::clear_prev_data(){
 void ls_solver::construct_slution_score(){
 //TODO::this is a temp function, setting all vars 0
     for(int i=0;i<_num_vars;i++){
-        if(!_vars[i].is_nia){_solution[i]=1;continue;}
+        if(!_vars[i].is_nia){_solution[i]=-1;continue;}
         if(_vars[i].low_bound>0){_solution[i]=_vars[i].low_bound;}
         else if(_vars[i].upper_bound<0){_solution[i]=_vars[i].upper_bound;}
         else{_solution[i]=0;}
+    }
+//    read_model();
+}
+
+void ls_solver::read_model(){
+    int size;
+    std::cin>>size;
+    std::string in_string,in_string_2;
+    for(int i=0;i<size;i++){
+        std::cin>>in_string;
+        std::cin>>in_string_2;
+        if(name2var.find(in_string)!=name2var.end()){
+            if(in_string_2=="false"){_solution[name2var[in_string]]=-1;}
+            else if(in_string_2=="true"){_solution[name2var[in_string]]=1;}
+            else{_solution[name2var[in_string]]=atoi(in_string_2.c_str());}
+        }
     }
 }
 

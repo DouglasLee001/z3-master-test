@@ -207,9 +207,8 @@ int ls_solver::pick_critical_move(__int128_t &best_value){
     if(best_var_idx!=-1){return best_var_idx;}
     //choose from swap operations if there is no decreasing unsat critical
     if(!sat_clause_with_false_literal->empty()){
-        best_score=0;
         operation_idx=0;
-        for(int i=0;operation_idx<20&&i<50;i++){add_swap_operation(operation_idx);}
+        add_swap_operation(operation_idx);
         //recover the false_lit
         false_lit_occur->clear();
         select_best_operation_from_vec(operation_idx,best_score,best_var_idx, best_value);
@@ -225,6 +224,8 @@ int ls_solver::pick_critical_move(__int128_t &best_value){
 void ls_solver::critical_move(uint64_t var_idx, __int128_t change_value){
     int direction=(change_value>0)?0:1;
     if(_vars[var_idx].is_nia){
+        last_op_value=change_value;
+        last_op_var=var_idx;
         move_update(var_idx, change_value);
         _solution[var_idx]+=change_value;
     }
@@ -292,6 +293,7 @@ __int128_t ls_solver::devide(__int128_t a, __int128_t b){
     return (a^b)>=0?up_round:-up_round;
 }
 void ls_solver::insert_operation(uint64_t var_idx,__int128_t change_value,int &operation_idx,bool use_tabu){
+    if(var_idx==last_op_var&&change_value==-last_op_value){return;}//if op returns to previous assignment, it is banned
     uint64_t direction=(change_value>0)?0:1;
     if(use_tabu&&_step<tabulist[2*var_idx+direction]){return;}// the operation is now tabued
     __int128_t future_solution=_solution[var_idx]+change_value;
@@ -306,11 +308,27 @@ void ls_solver::insert_operation(uint64_t var_idx,__int128_t change_value,int &o
 }
 
 void ls_solver::add_swap_operation(int &operation_idx){
-    int clause_idx=sat_clause_with_false_literal->element_at(mt()%sat_clause_with_false_literal->size());
-    clause *cl=&(_clauses[clause_idx]);
-    for(int l_idx:cl->nia_literals){
-        if((_lits[std::abs(l_idx)].is_true^l_idx)<0){add_operation_from_false_lit(false, l_idx, operation_idx);}//determine a false lit, and add operation from it
+    int clause_idx;
+    clause *cl;
+    if(sat_clause_with_false_literal->size()<20){
+        for(int i=0;i<sat_clause_with_false_literal->size();i++){
+            clause_idx=sat_clause_with_false_literal->element_at(i);
+            cl=&(_clauses[clause_idx]);
+            for(int l_idx:cl->nia_literals){
+                if((_lits[std::abs(l_idx)].is_true^l_idx)<0){add_operation_from_false_lit(true, l_idx, operation_idx);}//determine a false lit, and add operation from it
+            }
+        }
     }
+    else{
+        for(int i=0;operation_idx<20&&i<50;i++){
+            clause_idx=sat_clause_with_false_literal->element_at(mt()%sat_clause_with_false_literal->size());
+            cl=&(_clauses[clause_idx]);
+            for(int l_idx:cl->nia_literals){
+                if((_lits[std::abs(l_idx)].is_true^l_idx)<0){add_operation_from_false_lit(true, l_idx, operation_idx);}//determine a false lit, and add operation from it
+            }
+        }
+    }
+    
 }
 
 //choose a clause with small weight, then choose a random lit, select the operation with greatest score in the lit

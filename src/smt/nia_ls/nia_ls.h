@@ -112,6 +112,8 @@ public:
     int                         nia_var_idx_with_most_lits;
     bool                        use_pbs=false;
     bool                        is_idl=true;//if it is the IDL mode
+    uint64_t                    last_op_var;
+    __int128_t                  last_op_value;//the last value and last var, x +1, at least at next step, x -1 is forbidden
     //solution
     std::vector<__int128_t>       _solution;
     std::vector<__int128_t>       _best_solutin;
@@ -179,6 +181,7 @@ public:
     __int128_t                  hash_lits_to_num(std::vector<int> &lits);
     void                        reduce_clause();
     void                        set_pre_value();
+    void                        read_model();
     
     //random walk
     void                        update_clause_weight();
