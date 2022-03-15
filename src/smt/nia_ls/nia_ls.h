@@ -19,7 +19,7 @@
 #include <algorithm>
 
 namespace nia {
-const __int128_t max_int=__int128_t(INT32_MAX)*__int128_t(INT64_MAX);
+const __int128_t max_int=__int128_t(INT64_MAX);
 //the var_index=1(_vars[1]=x), exponent=2: x^2
 struct var_exp{
     int var_index;
@@ -149,6 +149,7 @@ public:
     std::vector<int>            _pre_value_1;//the 1st pre-set value of a var, if the var is in the form of (a==0 OR a==1)
     std::vector<int>            _pre_value_2;
     bool                         use_swap_from_from_small_weight;
+    std::vector<bool>           term_appear;//true means the term exists
     // data structure for clause weighting
     const uint64_t              smooth_probability;
     uint64_t                    _swt_threshold;

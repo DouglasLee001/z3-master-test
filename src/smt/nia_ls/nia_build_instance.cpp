@@ -587,7 +587,7 @@ void ls_solver::reduce_clause(){
     //transfer the resolution vars to vars
     _num_clauses=reduced_clause_num;
     std::vector<bool> lit_appear(_num_lits+_additional_len,false);
-    std::vector<bool> term_appear(_terms.size()+_additional_len,false);
+    term_appear.resize(_terms.size()+_additional_len,false);
     for(int clause_idx=0;clause_idx<reduced_clause_num;clause_idx++){
         _clauses[clause_idx].weight=1;
         for(int k=0;k<_clauses[clause_idx].literals.size();k++){

@@ -528,6 +528,7 @@ bool ls_solver::check_solution(){
     clause *cp;
     int unsat_num=0;
     for(int term_idx=0;term_idx<_terms.size();term_idx++){
+        if(!term_appear[term_idx]){continue;}
         term *t=&(_terms[term_idx]);
         __int128_t new_term_value=1;
         for(var_exp &ve:t->var_epxs){
