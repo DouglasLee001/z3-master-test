@@ -40,7 +40,10 @@ void ls_solver::random_walk(){
     //recover the false_lit
     false_lit_occur->clear();
     //if no operation, return
-    if(operation_idx+operation_idx_bool==0){return;}
+    if(operation_idx+operation_idx_bool==0){
+        last_op_var=UINT64_MAX;//in case the random walk make no move, it will not ban the only operation
+        return;
+    }
     //nia mode make move
     if(operation_idx_bool==0||(operation_idx>0&&operation_idx_bool>0&&!is_in_bool_search)){
         __int128_t best_value_nia;
@@ -249,18 +252,12 @@ void ls_solver::critical_move(uint64_t var_idx, __int128_t change_value){
 //transfer the ">" to "<="
 void ls_solver::invert_lit(lit &l){
     l.key=1-l.key;
-    std::vector<int> tmp_coff_var_idx=l.pos_coff_term_idx;
-    std::vector<__int128_t> tmp_coff=l.pos_coff;
-    l.pos_coff_term_idx=l.neg_coff_term_idx;
-    l.pos_coff=l.neg_coff;
-    l.neg_coff_term_idx=tmp_coff_var_idx;
-    l.neg_coff=tmp_coff;
+    for(int i=0;i<l.coff_terms.size();i++){l.coff_terms[i].coff*=-1;}
 }
 //all coffs are positive, go through all terms of the literal
 __int128_t ls_solver::delta_lit(lit &l){
     __int128_t delta=l.key;
-    for(int i=0;i<l.pos_coff.size();i++){delta+=(l.pos_coff[i]*_terms[l.pos_coff_term_idx[i]].value);}
-    for(int i=0;i<l.neg_coff.size();i++){delta-=(l.neg_coff[i]*_terms[l.neg_coff_term_idx[i]].value);}
+    for(int i=0;i<l.coff_terms.size();i++){delta+=(l.coff_terms[i].coff*_terms[l.coff_terms[i].term_idx].value);}
     return delta;
 }
 

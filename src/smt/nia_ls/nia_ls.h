@@ -42,15 +42,18 @@ struct var_lit_term{
     var_lit_term(uint64_t _var_idx,uint64_t _term_idx,int _lit_idx,int _coff):var_idx(_var_idx),term_idx(_term_idx),lit_idx(_lit_idx),coff(_coff){};
 };
 
+struct coff_term{
+    int term_idx;
+    __int128_t coff;
+    coff_term(){};
+    coff_term(int _term_idx,__int128_t _coff):term_idx(_term_idx),coff(_coff){};
+};
 //one arith lit is in the form of a_1*term_1+...+a_n*term_n+k<=0, the cofficient are divided into positive ones and negative ones, the coff are positive.
-//if neg_coff =1 neg_coff_term=xy pos_coff=1 pos_coff_var=ab means xy-ab
+//if coff =1 , -1 term=xy, ab means xy-ab
 //if is_nia_lit: \sum coff*term<=key
 //else:_vars[delta] 
 struct lit{
-    std::vector<int>            pos_coff_term_idx;
-    std::vector<__int128_t>        pos_coff;
-    std::vector<int>            neg_coff_term_idx;
-    std::vector<__int128_t>        neg_coff;
+    std::vector<coff_term>          coff_terms;//sort by term
     std::vector<var_lit_term>      var_lit_terms;//sort by var
     __int128_t                     key;
     int                         lits_index;
@@ -153,11 +156,18 @@ public:
     uint64_t                    total_clause_weight;
     int                         _lit_in_unsat_clause_num;
     int                         _bool_lit_in_unsat_clause_num;
+    //data structure for equality
+    std::vector<int>            fa;//fa[x]=f means x=coff*f
+    std::vector<int>            fa_coff;//fa_coff[x]=c means x==c*fa[x]
     
     //input transformation
     void                        split_string(std::string &in_string, std::vector<std::string> &str_vec,std::string pattern);
     void                        build_lits(std::string &in_string);
     void                        build_instance(std::vector<std::vector<int> >& clause_vec);
+    void                        equal_vars(std::vector<std::vector<int> >& clause_vec);//find out the equalilty among vars, and reset the terms and lits
+    int                        find(int var_idx);//return the fa of var_idx
+    void                        merge(int var_idx_1,int var_idx_2,int coff_1,int coff_2);//var_1*coff_1=var_2*coff_2
+    void                        update_lit_equal(int lit_idx);
     uint64_t                    transfer_name_to_reduced_var(std::string & name,bool is_nia);//after the resolution vars are inserted into _vars
     uint64_t                    transfer_name_to_resolution_var(std::string &name,bool is_nia);//bool var is inserted into _resolution_var when build lit
     uint64_t                    transfer_name_to_tmp_var(std::string &name);//nia var is first inserted into _tmp_var when build lit, then inserted into _resolution_var when reduce var(x-y->z)

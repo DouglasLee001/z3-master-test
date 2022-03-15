@@ -18,8 +18,6 @@ void ls_solver::print_formula_pbs(){
     std::cout<<"p wcnf "<<_num_vars<<" "<<(_num_lits-_num_vars*2)<<" "<<_num_vars+1<<"\n";
     for(int lit_idx=1;lit_idx<_num_lits;lit_idx++){
         lit *l=&(_lits[lit_idx]);
-        if(l->pos_coff.size()==1&&l->neg_coff.size()==0&&l->pos_coff[0]==1&&l->key==-1){continue;}
-        if(l->neg_coff.size()==1&&l->pos_coff.size()==0&&l->neg_coff[0]==1&&l->key==0){continue;}
         if(l->lits_index==0){continue;}
         print_lit_pbs(_lits[lit_idx]);
     }
@@ -50,14 +48,9 @@ void ls_solver::print_term(term &t){
 void ls_solver::print_literal(lit &l){
     if(!l.is_nia_lit){std::cout<<_vars[l.delta].var_name<<"\n";}
     else{
-    for(int i=0;i<l.pos_coff.size();i++){
-        std::cout<<"( "<<print_128(l.pos_coff[i])<<" * ";
-        print_term(_terms[l.pos_coff_term_idx[i]]);
-        std::cout<<" ) + ";
-    }
-    for(int i=0;i<l.neg_coff.size();i++){
-        std::cout<<"( -"<<print_128(l.neg_coff[i])<<" * ";
-        print_term(_terms[l.neg_coff_term_idx[i]]);
+    for(int i=0;i<l.coff_terms.size();i++){
+        std::cout<<"( "<<print_128(l.coff_terms[i].coff)<<" * ";
+        print_term(_terms[l.coff_terms[i].term_idx]);
         std::cout<<" ) + ";
     }
     std::cout<<"( "<<print_128(l.key)<<" ) "<<(l.is_equal?"==":"<=")<<" 0\n";
@@ -66,18 +59,16 @@ void ls_solver::print_literal(lit &l){
 
 void ls_solver::print_lit_pbs(lit &l){
     __int128_t degree=l.key;
-    for(int i=0;i<l.pos_coff.size();i++){degree+=l.pos_coff[i];}
+    for(int i=0;i<l.coff_terms.size();i++){degree+=l.coff_terms[i].coff;}
     std::cout<<_num_vars+1<<" "<<print_128(degree)<<" ";
-    for(int i=0;i<l.pos_coff.size();i++)
-    {std::cout<<print_128(l.pos_coff[i])<<" "<<-(l.pos_coff_term_idx[i]+1)<<" ";}
-    for(int i=0;i<l.neg_coff.size();i++)    {std::cout<<print_128(l.neg_coff[i])<<" "<<l.neg_coff_term_idx[i]+1<<" ";}
+    for(int i=0;i<l.coff_terms.size();i++){std::cout<<print_128(l.coff_terms[i].coff)<<" "<<-(l.coff_terms[i].term_idx+1)<<" ";}
     std::cout<<"0\n";
 }
 
 void ls_solver::print_lit_smt(int lit_idx){
     lit *l=&(_lits[std::abs(lit_idx)]);
     if(l->is_nia_lit){
-        std::cout<<"("<<(lit_idx>0?"<=":">")<<" (- "<<_vars[l->pos_coff_term_idx[0]].var_name<<" "<<_vars[l->neg_coff_term_idx[0]].var_name<<") "<<print_128(-l->key)<<" ) ";
+        //TODO:
     }
     else{
         if(lit_idx>0){std::cout<<_vars[l->delta].var_name<<" ";}
