@@ -68,7 +68,7 @@ void ls_solver::random_walk(){
     //if no operation, return
     if(operation_idx+operation_idx_bool==0){
         last_op_var=UINT64_MAX;//in case the random walk make no move, it will not ban the only operation
-//        no_operation_random_walk();
+        no_operation_random_walk();
         return;
     }
     //nia mode make move
