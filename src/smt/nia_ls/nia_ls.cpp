@@ -25,6 +25,32 @@ void ls_solver::smooth_clause_weight(){
     }
 }
 
+//when there is no operation, simply find a lit in a random false clause, pick a random var with coff!=0, set it to 0
+void ls_solver::no_operation_random_walk(){
+    clause *cp=&(_clauses[unsat_clauses->element_at(mt()%unsat_clauses->size())]);//choose a random unsat clause
+    int lit_idx=cp->nia_literals[mt()%cp->nia_literals.size()];
+    lit *l=&(_lits[std::abs(lit_idx)]);
+    var_lit_term *vlt;
+    __int128_t coff=0;//the coff = sum(term_coff*vlt_coff) ( 1 * x1*x2 ) + ( -1 * x1 ) + ( -1 * x3 ) for x1 the coff=(1*x2)+(-1)
+    uint64_t var_idx_curr=l->var_lit_terms[0].var_idx;//the current var idx of var_lit_term
+    int l_var_lit_term_num=(int)l->var_lit_terms.size();
+    std::vector<uint64_t> var_idx_none_zero;//the vars with coff != 0
+    //go through the var_lit_term and insert critical move for each var
+    for(int vlt_idx=0;vlt_idx<l_var_lit_term_num;vlt_idx++){
+        vlt=&(l->var_lit_terms[vlt_idx]);
+        if(vlt->var_idx!=var_idx_curr){
+            coff=0;
+            var_idx_curr=vlt->var_idx;
+        }//enter a new var
+        coff+=vlt->coff*coff_in_term(var_idx_curr, vlt->term_idx);//determine the coff
+        if((vlt_idx==l_var_lit_term_num-1)||(var_idx_curr!=l->var_lit_terms[vlt_idx+1].var_idx)){
+            if(coff!=0){var_idx_none_zero.push_back(var_idx_curr);}// if coff==0, changing the var cannot make any progress
+        }//the last vlt of the var or the last vlt of the lit
+    }
+    var_idx_curr=var_idx_none_zero[mt()%var_idx_none_zero.size()];
+    critical_move(var_idx_curr, -_solution[var_idx_curr]);//move a random var with coff!=0 to 0
+}
+
 void ls_solver::random_walk(){
     int operation_idx(0),operation_idx_bool(0),clause_idx;
     clause *cp;
@@ -42,6 +68,7 @@ void ls_solver::random_walk(){
     //if no operation, return
     if(operation_idx+operation_idx_bool==0){
         last_op_var=UINT64_MAX;//in case the random walk make no move, it will not ban the only operation
+//        no_operation_random_walk();
         return;
     }
     //nia mode make move
@@ -168,7 +195,7 @@ void ls_solver::select_best_operation_from_vec(int operation_idx,int &best_score
     bool BMS;
     int cnt,score;
     uint64_t operation_var_idx,best_last_move(UINT64_MAX);
-    __int128_t operation_change_value;
+    __int128_t operation_change_value,best_future_abs_value(INT64_MAX),future_abs_value;
     if(operation_idx>45){BMS=true;cnt=45;}
     else{BMS=false;cnt=operation_idx;}
     for(int i=0;i<cnt;i++){
@@ -183,10 +210,11 @@ void ls_solver::select_best_operation_from_vec(int operation_idx,int &best_score
             operation_change_value=operation_change_value_vec[i];
             operation_var_idx=operation_var_idx_vec[i];
         }
+        future_abs_value=abs_128(_solution[operation_var_idx]+operation_change_value);
         score=critical_score(operation_var_idx,operation_change_value);
         int opposite_direction=(operation_change_value>0)?1:0;//if the change value is >0, then means it is moving forward, the opposite direction is 1(backward)
         uint64_t last_move_step=last_move[2*operation_var_idx+opposite_direction];
-        if(score>best_score||(score==best_score&&last_move_step<best_last_move)){
+        if(score>best_score||(score==best_score&&future_abs_value<best_future_abs_value)||(score==best_score&&future_abs_value==best_future_abs_value&&last_move_step<best_last_move)){
             best_score=score;
             best_var_idx=(int)operation_var_idx;
             best_value=operation_change_value;

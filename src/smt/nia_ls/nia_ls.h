@@ -198,6 +198,7 @@ public:
     void                        update_clause_weight();
     void                        smooth_clause_weight();
     void                        random_walk();
+    void                        no_operation_random_walk();//when there is no operation, simply find a lit in a random false clause, pick a random var with coff!=0, set it to 0
     
     //construction
     void                        construct_slution_score();//construct the solution based on score
