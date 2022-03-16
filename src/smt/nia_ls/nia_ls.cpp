@@ -28,9 +28,13 @@ void ls_solver::smooth_clause_weight(){
 //when there is no operation, simply find a lit in a random false clause, pick a random var with coff!=0, set it to 0
 void ls_solver::no_operation_random_walk(){
     clause *cp=&(_clauses[unsat_clauses->element_at(mt()%unsat_clauses->size())]);//choose a random unsat clause
-    int lit_idx=cp->nia_literals[mt()%cp->nia_literals.size()];
+    int lit_idx=cp->literals[mt()%cp->literals.size()];
     lit *l=&(_lits[std::abs(lit_idx)]);
-    var_lit_term *vlt;
+    if(!l->is_nia_lit){
+        critical_move(l->delta, 0);
+        return;
+    }//boolean lit
+    var_lit_term *vlt;//nia lit
     __int128_t coff=0;//the coff = sum(term_coff*vlt_coff) ( 1 * x1*x2 ) + ( -1 * x1 ) + ( -1 * x3 ) for x1 the coff=(1*x2)+(-1)
     uint64_t var_idx_curr=l->var_lit_terms[0].var_idx;//the current var idx of var_lit_term
     int l_var_lit_term_num=(int)l->var_lit_terms.size();
