@@ -153,7 +153,11 @@ void ls_solver::add_operation_from_false_lit(bool use_tabu, int lit_idx, int &op
         }//enter a new var
         coff+=vlt->coff*coff_in_term(var_idx_curr, vlt->term_idx);//determine the coff
         if((vlt_idx==l_var_lit_term_num-1)||(var_idx_curr!=l->var_lit_terms[vlt_idx+1].var_idx)){
-            if(coff==0){continue;}// if coff==0, changing the var cannot make any progress
+            if(coff==0){
+                insert_operation(var_idx_curr, 1, operation_idx, use_tabu);
+                insert_operation(var_idx_curr, -1, operation_idx, use_tabu);
+                continue;
+            }// if coff==0, change the var by 1
             if(l->is_equal){
                 if(lit_idx>0){
                     if(lit_delta%coff==0){insert_operation(var_idx_curr,(-lit_delta/coff), operation_idx,use_tabu);}
