@@ -222,11 +222,12 @@ void ls_solver::select_best_operation_from_vec(int operation_idx,int &best_score
         score=critical_score(operation_var_idx,operation_change_value);
         int opposite_direction=(operation_change_value>0)?1:0;//if the change value is >0, then means it is moving forward, the opposite direction is 1(backward)
         uint64_t last_move_step=last_move[2*operation_var_idx+opposite_direction];
-        if(score>best_score){
+        if(score>best_score||(score==best_score&&future_abs_value<best_future_abs_value)||(score==best_score&&future_abs_value==best_future_abs_value&&last_move_step<best_last_move)){
             best_score=score;
             best_var_idx=(int)operation_var_idx;
             best_value=operation_change_value;
             best_last_move=last_move_step;
+            best_future_abs_value=future_abs_value;
         }
     }
 }
