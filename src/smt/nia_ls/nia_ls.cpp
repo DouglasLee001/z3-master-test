@@ -218,7 +218,7 @@ void ls_solver::select_best_operation_from_vec(int operation_idx,int &best_score
         score=critical_score(operation_var_idx,operation_change_value);
         int opposite_direction=(operation_change_value>0)?1:0;//if the change value is >0, then means it is moving forward, the opposite direction is 1(backward)
         uint64_t last_move_step=last_move[2*operation_var_idx+opposite_direction];
-        if(score>best_score||(score==best_score&&future_abs_value<best_future_abs_value)||(score==best_score&&future_abs_value==best_future_abs_value&&last_move_step<best_last_move)){
+        if(score>best_score){
             best_score=score;
             best_var_idx=(int)operation_var_idx;
             best_value=operation_change_value;
@@ -399,8 +399,8 @@ int ls_solver::critical_score(uint64_t var_idx, __int128_t change_value){
         c=&(_clauses[cls_idx]);
         int clause_sat_count_new=c->sat_count;
         for(int v_lit:c->literals){clause_sat_count_new+=(v_lit>0)?_lit_make_break[v_lit]:(-_lit_make_break[-v_lit]);}
-        if(c->sat_count>0&&clause_sat_count_new==0){critical_score--;}
-        else if(c->sat_count==0&&clause_sat_count_new>0){critical_score++;}
+        if(c->sat_count>0&&clause_sat_count_new==0){critical_score-=c->weight;}
+        else if(c->sat_count==0&&clause_sat_count_new>0){critical_score+=c->weight;}
     }
     //recover the lit_make_break
     for(uint64_t l_idx:var->literal_idxs){_lit_make_break[l_idx]=0;}
