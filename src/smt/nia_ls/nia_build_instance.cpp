@@ -20,7 +20,6 @@ void ls_solver::build_lits(std::string &in_string){
     split_string(in_string, vec);
     if(vec[0]=="0"){_lits[0].lits_index=0; return;}//true literal
     int lit_index=std::atoi(vec[0].c_str());
-    if(vec[1][1]=='!'){_lits[lit_index].lits_index=0;return;}//lits index==0 means that the lit is true
     lit *l=&(_lits[lit_index]);
     if(vec[1]=="or"||vec[1]=="if"){
         l->delta=transfer_name_to_resolution_var(vec[2], false);
