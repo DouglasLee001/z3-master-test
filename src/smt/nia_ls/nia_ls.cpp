@@ -327,6 +327,15 @@ __int128_t ls_solver::devide(__int128_t a, __int128_t b){
     return (a^b)>=0?up_round:-up_round;
 }
 void ls_solver::insert_operation(uint64_t var_idx,__int128_t change_value,int &operation_idx,bool use_tabu){
+    if(var_in_long_term->is_in_array((int)var_idx)){
+        for(uint64_t term_idx:_vars[var_idx].term_idxs){
+            term &t=_terms[term_idx];
+            if(t.var_epxs.size()>2){
+                __int128_t future_term_value=t.value+coff_in_term(var_idx, term_idx)*change_value;
+                if(future_term_value>max_int||future_term_value<-max_int){return;}
+            }
+        }
+    }
     if(var_idx==last_op_var&&change_value==-last_op_value){return;}//if op returns to previous assignment, it is banned
     uint64_t direction=(change_value>0)?0:1;
     if(use_tabu&&_step<tabulist[2*var_idx+direction]){return;}// the operation is now tabued

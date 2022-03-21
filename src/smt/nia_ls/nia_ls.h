@@ -112,6 +112,7 @@ public:
     Array                       *sat_clause_with_false_literal;//clauses with 0<sat_num<literal_num, from which swap operation are choosen
     Array                       *contain_bool_unsat_clauses;//unsat clause with at least one boolean var
     Array                       *false_lit_occur;//the false lits for choosing critical move
+    Array                       *var_in_long_term;//the var in terms with length>2
     int                         nia_var_idx_with_most_lits;
     bool                        use_pbs=false;
     bool                        is_idl=true;//if it is the IDL mode

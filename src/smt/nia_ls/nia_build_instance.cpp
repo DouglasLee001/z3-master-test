@@ -672,10 +672,23 @@ void ls_solver::reduce_clause(){
         }
         v.literal_idxs.resize(var_lit_num);
     }//determine the lit_idxs of var
+    var_in_long_term=new Array((int)_num_vars+(int)_additional_len);
     for(uint64_t term_idx=0;term_idx<_terms.size();term_idx++){
         if(!term_appear[term_idx]){continue;}
         t=&(_terms[term_idx]);
-        for(var_exp &ve:t->var_epxs){_vars[ve.var_index].term_idxs.push_back(term_idx);}
+        std::sort(t->var_epxs.begin(),t->var_epxs.end(),cmp_ve);
+        int curr_var_idx=-1;
+        for(var_exp &ve:t->var_epxs){
+            _vars[ve.var_index].term_idxs.push_back(term_idx);
+            if(curr_var_idx==ve.var_index){
+                std::cout<<"unknown\nthe term (";
+                print_term(*t);
+                std::cout<<") has coff > 1\n";
+                std::exit(0);
+            }
+            else{curr_var_idx=ve.var_index;}
+        }
+        if(t->var_epxs.size()>2){for(var_exp &ve:t->var_epxs){var_in_long_term->insert_element(ve.var_index);}}
     }//determine the term_idxs of vars
 }
 
