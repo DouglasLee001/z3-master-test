@@ -102,10 +102,6 @@ void ls_solver::print_mv_vars(uint64_t var_idx){
 
 void ls_solver::print_var_solution(std::string &var_name,std::string & var_value){
     uint64_t var_idx=0;
-    if(name2tmp_var.find(var_name)==name2tmp_var.end()){
-        var_value=print_128(0);
-        return;
-    }//Bool case: since the Bool var will directly enter resolution var
     //nia case follows
     int origin_var_idx=(int)name2tmp_var[var_name];
     if(name2var.find(var_name)!=name2var.end()){
@@ -114,7 +110,7 @@ void ls_solver::print_var_solution(std::string &var_name,std::string & var_value
         return;
     }//the var exists in _vars
     else{
-        var_value=print_128( _tmp_vars[origin_var_idx].low_bound);
+        var_value="unknown var???";
         return;
     }//the var does not exist in reduced formula
 }

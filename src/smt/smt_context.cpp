@@ -98,7 +98,7 @@ namespace smt {
         m_last_search_failure(UNKNOWN),
         m_searching(false) {
         // m_ls_solver=new boolidl::bool_ls_solver((int)m_fparams.m_random_seed);
-        // m_lia_ls_solver=new lia::ls_solver((int)m_fparams.m_random_seed);
+        m_lia_ls_solver=new lia::ls_solver((int)m_fparams.m_random_seed);
         m_nia_ls_solver=new nia::ls_solver((int)m_fparams.m_random_seed);
         SASSERT(m_scope_lvl == 0);
         SASSERT(m_base_lvl == 0);
@@ -3691,9 +3691,12 @@ namespace smt {
             m_nia_ls_solver->local_search();
             if(m_nia_ls_solver->best_found_cost==0){
                 std::cout<<"local search sat\n";
-                std::exit(0);
+                m_model_generator->reset();
+                m_proto_model = m_model_generator->mk_model_ls(m_nia_ls_solver);//此处先影响m_proto_model再影响m_model,这里会调用model_generator的mk_model中带有local search的部分
+                // model_pp(std::cout, *m_proto_model);
+                // std::exit(0);
             }
-            return check_finalize(check());
+            return check_finalize(l_true);
         }
     }
     //根据参数use_static_features来返回不同的config模式
@@ -3754,7 +3757,7 @@ namespace smt {
             init_assumptions(asms);
             TRACE("before_search", display(tout););
             r = search();
-            r = mk_unsat_core(r);        
+            r = mk_unsat_core(r);  
         }
         while (should_research(r));
         r = check_finalize(r);

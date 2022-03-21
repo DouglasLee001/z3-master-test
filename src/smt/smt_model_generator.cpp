@@ -87,6 +87,26 @@ namespace smt {
         }
     }
 
+    void model_generator::mk_bool_model(nia::ls_solver *solver){
+        unsigned sz = m_context->get_num_b_internalized();
+        for (unsigned i = 0; i < sz; i++) {
+            expr * p = m_context->get_b_internalized(i);
+            if (is_uninterp_const(p) && m_context->is_relevant(p)) {
+                SASSERT(m.is_bool(p));
+                func_decl * d = to_app(p)->get_decl();
+                lbool val     = m_context->get_assignment(p);
+                expr * v      = val == l_true ? m.mk_true() : m.mk_false();
+                m_model->register_decl(d, v);
+                std::stringstream var_name_stream;
+                var_name_stream<<mk_pp(p,m);
+                std::string var_name=var_name_stream.str();
+                std::string var_value;
+                solver->print_var_solution(var_name,var_value);
+                std::cout<<"BOOL "<<var_name<<" value "<<var_value<<"\n";
+            }
+        }
+    }
+
     /**
        \brief Create the mapping root2proc: enode-root -> model_value_proc, and roots.
        Store the new model_value_proc at procs.
@@ -414,6 +434,39 @@ namespace smt {
         }
     }
 
+    void model_generator::mk_values_ls(nia::ls_solver *solver) {
+        arith_factory a_fac=arith_factory(m);
+        rational num;
+        for (enode * n : m_context->enodes()) {
+            app *val;
+            if (is_uninterp_const(n->get_expr())) {
+                func_decl * d = n->get_expr()->get_decl();
+                if (m_hidden_ufs.contains(d)) continue;
+                std::stringstream var_name_stream;
+                var_name_stream<<mk_pp(n->get_expr(),m);
+                std::string var_name=var_name_stream.str();
+                sort * s      = m.get_sort(n->get_owner());
+                std::string var_value;
+                solver->print_var_solution(var_name,var_value);
+                std::cout<<"register model INT: "<<var_name<<" value: "<<var_value<<"\n";
+                num=rational(var_value.c_str()).get_rational();
+                val=a_fac.mk_num_value(num,true);//只要在此处将val赋值便可以了
+                register_value(val);
+                m_asts.push_back(val);
+                m_root2value.insert(n, val);
+            }
+        }
+        // send model
+        for (enode * n : m_context->enodes()) {
+            if (is_uninterp_const(n->get_expr())) {
+                func_decl * d = n->get_expr()->get_decl();
+                if (m_hidden_ufs.contains(d)) continue;
+                expr * val    = get_value(n);
+                m_model->register_decl(d, val);
+            }
+        }
+    }
+
     model_generator::scoped_reset::scoped_reset(model_generator& mg, ptr_vector<model_value_proc>& procs): 
         mg(mg), procs(procs) {}
 
@@ -559,6 +612,20 @@ namespace smt {
         init_model();
         register_existing_model_values();//注册已经存在的model 值，此处不会调用register_value 函数
         mk_bool_model();
+        mk_values_ls(solver);//此处会调用register_value函数
+        mk_func_interps();
+        finalize_theory_models();
+        register_macros();
+        TRACE("model", model_v2_pp(tout, *m_model, true););        
+        return m_model.get();
+    }
+
+        proto_model * model_generator::mk_model_ls(nia::ls_solver * solver) {
+        SASSERT(!m_model);
+        TRACE("model_verbose", m_context->display(tout););
+        init_model();
+        register_existing_model_values();//注册已经存在的model 值，此处不会调用register_value 函数
+        mk_bool_model(solver);
         mk_values_ls(solver);//此处会调用register_value函数
         mk_func_interps();
         finalize_theory_models();
