@@ -102,15 +102,21 @@ void ls_solver::print_mv_vars(uint64_t var_idx){
 
 void ls_solver::print_var_solution(std::string &var_name,std::string & var_value){
     uint64_t var_idx=0;
-    //nia case follows
-    int origin_var_idx=(int)name2tmp_var[var_name];
     if(name2var.find(var_name)!=name2var.end()){
         var_idx=name2var[var_name];
         var_value=print_128(_solution[var_idx]);
         return;
     }//the var exists in _vars
     else{
-        var_value="unknown var???";
+        if(name2tmp_var.find(var_name)!=name2tmp_var.end()){
+            int v_idx=(int)name2tmp_var[var_name];
+            int new_v_tmp_idx=find(v_idx);
+            int new_v_idx=(int)name2var[_tmp_vars[new_v_tmp_idx].var_name];
+            var_value=print_128(_solution[new_v_idx]*fa_coff[v_idx]);
+        }//a nia var
+        else{
+            var_value=_resolution_vars[name2resolution_var[var_name]].up_bool>0?"1":"-1";
+        }//a boolean var
         return;
     }//the var does not exist in reduced formula
 }
@@ -130,5 +136,37 @@ std::string ls_solver::print_128(__int128_t n){
         }
         for (int i=1;i<=ai;i++) ss<<abs(a[ai-i]);
         return ss.str();
+}
+void ls_solver::up_bool_vars(){//reconstruct the solution by pop the stack
+    for(int i=0;i<_resolution_vars.size();i++){if(!_resolution_vars[i].is_nia&&_resolution_vars[i].up_bool==0){_resolution_vars[i].up_bool=-1;}}//set all origin bool var as false
+    while(!_reconstruct_stack.empty()){
+        clause cl=_reconstruct_stack.top();
+        _reconstruct_stack.pop();
+        bool sat_flag=false;
+        for(int l_idx:cl.literals){
+            lit *l=&(_lits[std::abs(l_idx)]);
+            if(l->is_nia_lit){
+                if(!lit_appear[std::abs(l_idx)]){
+                    __int128_t delta=l->delta;
+                    for(coff_term& cf:l->coff_terms){
+                        if(!term_appear[cf.term_idx]){sat_flag=true;break;}//if the term does not exist, the nia lit can be true
+                        else{delta+=(cf.coff*_terms[cf.term_idx].value);}
+                    }
+                    if((delta<=0&&l_idx>0)||(delta>0&&l_idx<0)){sat_flag=true;}
+                    if(sat_flag==true){break;}
+                }//if the nia lit does not exist
+                else if((l->delta<=0&&l_idx>0)||(l->delta>0&&l_idx<0)){sat_flag=true;break;}//if the nia lit exists
+            }
+            else{
+                if(!lit_appear[std::abs(l_idx)]){
+                    if((l_idx>0&&_resolution_vars[l->delta].up_bool>0)||(l_idx<0&&_resolution_vars[l->delta].up_bool<0)){sat_flag=true;break;}}//if the boolean lit does not exist
+                else if((_solution[l->delta]>0&&l_idx>0)||(_solution[l->delta]<0&&l_idx<0)){sat_flag=true;break;}
+            }
+        }
+        if(sat_flag==false){
+            lit *l=&(_lits[std::abs(cl.literals[0])]);
+            _resolution_vars[l->delta].up_bool=1;
+        }//if the clause is false, flip the var
+    }
 }
 }

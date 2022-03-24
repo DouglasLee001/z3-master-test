@@ -420,6 +420,7 @@ void ls_solver::unit_prop(){
         int is_pos_lit=(_clauses[unit_clause_idx].literals[0]>0)?1:-1;//determine the sign of the var in unit clause
         uint64_t unit_var=_lits[std::abs(_clauses[unit_clause_idx].literals[0])].delta;//determing the var in unit clause
         _resolution_vars[unit_var].is_delete=true;//delete the unit var
+        _resolution_vars[unit_var].up_bool=is_pos_lit;//set the solution of a boolean var as its unit propogation value
         for(uint64_t cl_idx:_resolution_vars[unit_var].clause_idxs){
             clause *cl=&(_clauses[cl_idx]);
             if(cl->is_delete)continue;
@@ -526,6 +527,8 @@ void ls_solver::resolution(){
         }
         is_improve=true;
         _resolution_vars[bool_var_idx].is_delete=true;
+        if(pos_clause_size==0){_resolution_vars[bool_var_idx].up_bool=-1;}//if it is a false pure lit, the var is set to false
+        if(neg_clause_size==0){_resolution_vars[bool_var_idx].up_bool=1;}//if it is a true pure lit, the var is set to true
         if(pos_clause_size==0||neg_clause_size==0)continue;//pos or neg clause is empty, meaning the clauses are SAT when assigned to true or false, then cannot resolute, just delete the clause
         for(int i=0;i<pos_clause_size;i++){//pos clause X neg clause
             uint64_t pos_clause_idx=pos_clauses[i];
@@ -567,6 +570,32 @@ void ls_solver::resolution(){
                 }
             }
         }
+        for(int i=0;i<pos_clause_size;i++){
+            clause pos_cl=_clauses[pos_clauses[i]];
+            for(int j=0;j<pos_cl.literals.size();j++){
+                int l_idx=pos_cl.literals[j];
+                lit *l=&(_lits[std::abs(l_idx)]);
+                if(!l->is_nia_lit&&l->delta==bool_var_idx){
+                    pos_cl.literals[j]=pos_cl.literals[0];
+                    pos_cl.literals[0]=l_idx;
+                    break;
+                }
+            }
+            _reconstruct_stack.push(pos_cl);
+        }
+        for(int i=0;i<neg_clause_size;i++){
+            clause neg_cl=_clauses[neg_clauses[i]];
+            for(int j=0;j<neg_cl.literals.size();j++){
+                int l_idx=neg_cl.literals[j];
+                lit *l=&(_lits[std::abs(l_idx)]);
+                if(!l->is_nia_lit&&l->delta==bool_var_idx){
+                    neg_cl.literals[j]=neg_cl.literals[0];
+                    neg_cl.literals[0]=l_idx;
+                    break;
+                }
+            }
+            _reconstruct_stack.push(neg_cl);
+        }
     }
     }
 }
@@ -585,7 +614,7 @@ void ls_solver::reduce_clause(){
     for(int l_idx=0;l_idx<_lits.size();l_idx++){_lits[l_idx].lits_index=0;}//reset the lit_index
     //transfer the resolution vars to vars
     _num_clauses=reduced_clause_num;
-    std::vector<bool> lit_appear(_num_lits+_additional_len,false);
+    lit_appear.resize(_num_lits+_additional_len,false);
     term_appear.resize(_terms.size()+_additional_len,false);
     for(int clause_idx=0;clause_idx<reduced_clause_num;clause_idx++){
         _clauses[clause_idx].weight=1;

@@ -74,6 +74,7 @@ struct variable{
     bool                        is_nia;
     bool                        is_delete=false;
     int                         score;//if it is a bool var, then the score is calculated beforehand
+    int                         up_bool=0;//the bool value of variables deleted(1 true -1 false)
 };
 
 struct clause{
@@ -108,6 +109,7 @@ public:
     std::vector<int>            _lit_make_break;//making a move will make or break the lit itself (1:make, -1:break, 0:no change)
     std::vector<int>            _bound_lits;//record the index of bounded lits
     std::vector<clause>         _clauses;
+    std::stack<clause>          _reconstruct_stack;
     Array                       *unsat_clauses;
     Array                       *sat_clause_with_false_literal;//clauses with 0<sat_num<literal_num, from which swap operation are choosen
     Array                       *contain_bool_unsat_clauses;//unsat clause with at least one boolean var
@@ -151,6 +153,7 @@ public:
     std::vector<int>            _pre_value_2;
     bool                         use_swap_from_from_small_weight;
     std::vector<bool>           term_appear;//true means the term exists
+    std::vector<bool>           lit_appear;//true means the lit exists in the formula
     // data structure for clause weighting
     const uint64_t              smooth_probability;
     uint64_t                    _swt_threshold;
@@ -242,6 +245,7 @@ public:
     void                        print_mv_vars(uint64_t var_idx);
     void                        print_var_solution(std::string &var_name,std::string &var_value);
     void                        print_term(term &t);
+    void                        up_bool_vars();
     //calculate score
     int                         critical_score(uint64_t var_idx,__int128_t change_value);
     __int128_t                     critical_subscore(uint64_t var_idx,__int128_t change_value);

@@ -91,18 +91,16 @@ namespace smt {
         unsigned sz = m_context->get_num_b_internalized();
         for (unsigned i = 0; i < sz; i++) {
             expr * p = m_context->get_b_internalized(i);
-            if (is_uninterp_const(p) && m_context->is_relevant(p)) {
+            if (is_uninterp_const(p)) {
                 SASSERT(m.is_bool(p));
                 func_decl * d = to_app(p)->get_decl();
-                lbool val     = m_context->get_assignment(p);
-                expr * v      = val == l_true ? m.mk_true() : m.mk_false();
-                m_model->register_decl(d, v);
                 std::stringstream var_name_stream;
                 var_name_stream<<mk_pp(p,m);
                 std::string var_name=var_name_stream.str();
                 std::string var_value;
                 solver->print_var_solution(var_name,var_value);
-                std::cout<<"BOOL "<<var_name<<" value "<<var_value<<"\n";
+                expr * v      = var_value=="1" ? m.mk_true() : m.mk_false();
+                m_model->register_decl(d, v);
             }
         }
     }

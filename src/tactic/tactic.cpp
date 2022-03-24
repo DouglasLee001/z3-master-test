@@ -21,6 +21,7 @@ Notes:
 #include "tactic/probe.h"
 #include "util/stopwatch.h"
 #include "model/model_v2_pp.h"
+#define NLS_DEBUG
 
 
 struct tactic_report::imp {
@@ -188,6 +189,10 @@ lbool check_sat(tactic & t, goal_ref & g, model_ref & md, labels_vec & labels, p
         model_converter_ref mc = r[0]->mc();            
         if (mc.get()) {
             (*mc)(labels);
+            #ifdef LS_DEBUG
+                std::cout<<"tactic model convert!!!!!!!!!!!!!!!!\n";
+                mc.get()->display(std::cout);
+            #endif
             model_converter2model(m, mc.get(), md);
         }
         if (!m.inc()) {
@@ -198,6 +203,10 @@ lbool check_sat(tactic & t, goal_ref & g, model_ref & md, labels_vec & labels, p
             // create empty model.
             md = alloc(model, m);
         }
+        #ifdef LS_DEBUG
+            std::cout<<"tactic cpp model!!!!!!!!!!!\n";
+            model_v2_pp(std::cout,*md);
+        #endif    
         return l_true;
     }
     else if (is_decided_unsat(r)) {//如果decided_unsat了，则，返回false
