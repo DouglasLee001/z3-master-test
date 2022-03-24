@@ -21,13 +21,13 @@ void ls_solver::build_lits(std::string &in_string){
     split_string(in_string, vec);
     if(vec[0]=="0"){_lits[0].lits_index=0; return;}//true literal
     int lit_index=std::atoi(vec[0].c_str());
-    if(vec[1][1]=='!'){_lits[lit_index].lits_index=0;return;}//lits index==0 means that the lit is true
     lit *l=&(_lits[lit_index]);
-    if(vec[1]=="or"){
+    if(vec[1]=="or"||vec[1]=="if"){
         l->delta=transfer_name_to_resolution_var(vec[2], false);
         l->key=1;
         l->is_lia_lit=false;
         l->lits_index=lit_index;
+        _num_opt++;
         return;
     }//or term in the form: 1 or newvar_2
     if(vec.size()>2){
@@ -72,6 +72,7 @@ void ls_solver::build_lits(std::string &in_string){
             if(vec[2]==">="){l->key=bound;l->neg_coff.push_back(1);l->neg_coff_var_idx.push_back((int)var_idx);}
             else{l->key=-bound;l->pos_coff.push_back(1);l->pos_coff_var_idx.push_back((int)var_idx);}
             l->is_equal=(vec[2]=="=");
+            _num_opt+=2;
         }//( >= x 0 )
         
     }//lia lit
@@ -80,6 +81,7 @@ void ls_solver::build_lits(std::string &in_string){
         l->key=1;
         l->is_lia_lit=false;
         l->lits_index=lit_index;
+        _num_opt++;
     }//boolean lit
     
 }
