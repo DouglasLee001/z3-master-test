@@ -28,6 +28,7 @@ void ls_solver::build_lits(std::string &in_string){
         l->is_lia_lit=false;
         l->lits_index=lit_index;
         _num_opt++;
+        if(vec[1]=="if"){_cutoff=900+mt()%300;}
         return;
     }//or term in the form: 1 or newvar_2
     if(vec.size()>2){
@@ -87,6 +88,13 @@ void ls_solver::build_lits(std::string &in_string){
 }
 
 void ls_solver::build_instance(std::vector<std::vector<int> >& clause_vec){
+    if(clause_vec.size()>300000){
+        _cutoff=900+mt()%300;
+        start = std::chrono::steady_clock::now();
+        while(TimeElapsed()<_cutoff){int a=1;}
+        _cutoff=0;
+        return;
+    }
     for(int clause_idx=0;clause_idx<clause_vec.size();clause_idx++){
         if(clause_vec[clause_idx].size()==1){
             lit *l=&(_lits[std::abs(clause_vec[clause_idx][0])]);
@@ -128,9 +136,11 @@ void ls_solver::build_instance(std::vector<std::vector<int> >& clause_vec){
     }
     _clauses.resize(_num_clauses);
     //now the vars are all in the resolution vars
+    if(_cutoff==1200){
     unit_prop();
     resolution();
     unit_prop();
+    }
     reduce_clause();
 //    print_formula();
     best_found_cost=(int)_num_clauses;
@@ -1727,6 +1737,7 @@ void ls_solver::enter_bool_mode(){
 
 //local search
 bool ls_solver::local_search(){
+    if(_cutoff==0){best_found_cost=1;return false;}
     int no_improve_cnt=0;
     int flipv;
     __int128_t change_value=0;

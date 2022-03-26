@@ -3696,7 +3696,7 @@ namespace smt {
                 // model_pp(std::cout, *m_proto_model);
                 // std::exit(0);
             // }
-            return check_finalize(l_true);
+            return check_finalize(check());
         }
     }
     //根据参数use_static_features来返回不同的config模式
@@ -3896,7 +3896,7 @@ namespace smt {
 #ifdef IDL_DEBUG
         std::cout<<bool_percent_avg<<"\n"<<bool_percent_big<<"\n"<<idl_percent_avg<<"\n"<<idl_percent_big<<"\n"<<all_percent_avg<<"\n"<<all_percent_big<<"\n";
 #endif
-        std::cout<<enter_ls_cnt<<"\n"<<restart_time<<"\n"<<total_ls_time<<"\n";
+        // std::cout<<enter_ls_cnt<<"\n"<<restart_time<<"\n"<<total_ls_time<<"\n";
         TRACE("guessed_literals",
               expr_ref_vector guessed_lits(m);
               get_guessed_literals(guessed_lits);
