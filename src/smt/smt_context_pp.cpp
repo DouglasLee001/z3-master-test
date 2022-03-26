@@ -336,8 +336,8 @@ namespace smt {
         std::cout<<sz<<"\n";
 #endif
             // m_ls_solver->make_lits_space(sz);//构造lits的空间
-            m_lia_ls_solver->make_lits_space(sz);
-            // m_nia_ls_solver->make_lits_space(sz);
+            // m_lia_ls_solver->make_lits_space(sz);
+            m_nia_ls_solver->make_lits_space(sz);
             int new_var_num=0;
             int if_var_num=0;
             for (uint64_t i = 0; i < sz; i++) {
@@ -400,8 +400,8 @@ namespace smt {
                 std::cout<<myString<<"\n";
 #endif
                 // m_ls_solver->build_lits(myString);//输入lits
-                m_lia_ls_solver->build_lits(myString);
-                // m_nia_ls_solver->build_lits(myString);
+                // m_lia_ls_solver->build_lits(myString);
+                m_nia_ls_solver->build_lits(myString);
             }
         }
     }
