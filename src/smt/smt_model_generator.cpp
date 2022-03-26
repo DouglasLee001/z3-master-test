@@ -446,7 +446,7 @@ namespace smt {
                 sort * s      = m.get_sort(n->get_owner());
                 std::string var_value;
                 solver->print_var_solution(var_name,var_value);
-                std::cout<<"register model INT: "<<var_name<<" value: "<<var_value<<"\n";
+                // std::cout<<"register model INT: "<<var_name<<" value: "<<var_value<<"\n";
                 num=rational(var_value.c_str()).get_rational();
                 val=a_fac.mk_num_value(num,true);//只要在此处将val赋值便可以了
                 register_value(val);
