@@ -152,10 +152,15 @@ void ls_solver::up_bool_vars(){//reconstruct the solution by pop the stack
                         if(!term_appear[cf.term_idx]){sat_flag=true;break;}//if the term does not exist, the nia lit can be true
                         else{delta+=(cf.coff*_terms[cf.term_idx].value);}
                     }
-                    if((delta<=0&&l_idx>0)||(delta>0&&l_idx<0)){sat_flag=true;}
+                    if(!l->is_equal){if((delta<=0&&l_idx>0)||(delta>0&&l_idx<0)){sat_flag=true;}}
+                    else{if((delta==0&&l_idx>0)||(delta!=0&&l_idx<0)){sat_flag=true;}}
                     if(sat_flag==true){break;}
                 }//if the nia lit does not exist
-                else if((l->delta<=0&&l_idx>0)||(l->delta>0&&l_idx<0)){sat_flag=true;break;}//if the nia lit exists
+                else{
+                    if(!l->is_equal){if((l->delta<=0&&l_idx>0)||(l->delta>0&&l_idx<0)){sat_flag=true;break;}}
+                    else{if((l->delta==0&&l_idx>0)||(l->delta!=0&&l_idx<0)){sat_flag=true;break;}}
+                    //if the nia lit exists
+                }
             }
             else{
                 if(!lit_appear[std::abs(l_idx)]){
