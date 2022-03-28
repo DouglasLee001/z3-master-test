@@ -641,7 +641,8 @@ void ls_solver::reduce_clause(){
                     l->delta=transfer_name_to_reduced_var(_resolution_vars[l->delta].var_name, false);
                     _vars[l->delta].literal_idxs.push_back(std::abs(l_sign_idx));//for a boolean var, its first lit_idx is the lit containing the var
                 }
-                _vars[l->delta].clause_idxs.push_back(l_sign_idx>0?clause_idx:-clause_idx);//for a boolean var, if it is neg in a clause, the clause_idx<0
+                _vars[l->delta].clause_idxs.push_back(clause_idx);
+                _vars[l->delta].bool_var_in_pos_clause.push_back(l_sign_idx>0);//for a boolean var, if it is neg in a clause, it is false
                 _clauses[clause_idx].bool_literals.push_back(l_sign_idx);
             }
             if(!lit_appear[std::abs(l_sign_idx)]){

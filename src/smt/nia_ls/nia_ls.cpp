@@ -513,7 +513,7 @@ void ls_solver::move_update(uint64_t var_idx){
     int cl_sign_idx;
     for(int i=0;i<var->clause_idxs.size();i++){
         cl_sign_idx=var->clause_idxs[i];
-        if((_solution[var_idx]^cl_sign_idx)>=0){make_break_in_clause=-1;}//true to false
+        if((_solution[var_idx]>0&&var->bool_var_in_pos_clause[i])||(_solution[var_idx]<0&&!var->bool_var_in_pos_clause[i])){make_break_in_clause=-1;}//true to false
         else{make_break_in_clause=1;}//false to true
         int clause_idx=std::abs(cl_sign_idx);
         clause *cp=&(_clauses[clause_idx]);

@@ -64,7 +64,8 @@ struct lit{
 };
 
 struct variable{
-    std::vector<int>            clause_idxs;//for a boolean var, clause_idx can be false, which means that the var is in the neg form in the corresponding clause
+    std::vector<int>            clause_idxs;
+    std::vector<bool>            bool_var_in_pos_clause;//true means the boolean var is the pos form in corresponding clause
     std::vector<var_lit_term>   var_lit_terms;//sort by lit
     std::vector<uint64_t>         literal_idxs;
     std::vector<uint64_t>       term_idxs;//term idx(no repeating)
