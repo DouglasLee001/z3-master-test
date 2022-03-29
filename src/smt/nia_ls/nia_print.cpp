@@ -138,6 +138,35 @@ std::string ls_solver::print_128(__int128_t n){
         return ss.str();
 }
 void ls_solver::up_bool_vars(){//reconstruct the solution by pop the stack
+    for(variable &var:_tmp_vars){
+        if(var.is_nia&&name2var.find(var.var_name)==name2var.end()){//if it is an nia var and it is not in the formula
+            int var_idx=(int)transfer_name_to_reduced_var(var.var_name, true);//insert it into the vars
+            int tmp_var_idx=(int)name2tmp_var[var.var_name];//the idx in tmp_vars
+            int new_v_tmp_idx=find(tmp_var_idx);// the root of the var
+            if(new_v_tmp_idx!=tmp_var_idx){//it has the root
+                int new_v_idx=(int)name2var[_tmp_vars[new_v_tmp_idx].var_name];//the idx of root var in _vars
+                _solution[var_idx]=_solution[new_v_idx]*fa_coff[tmp_var_idx];
+            }
+            else{_solution[var_idx]=0;}
+        }
+    }//set the var solution
+    for(int term_idx=0;term_idx<_terms.size();term_idx++){
+        if(!term_appear[term_idx]){
+            term *t=&(_terms[term_idx]);
+            t->value=1;
+            for(var_exp &ve:t->var_epxs){
+                ve.var_index=(int)transfer_name_to_reduced_var(_resolution_vars[ve.var_index].var_name, true);
+                t->value*=_solution[ve.var_index];
+            }
+            term_appear[term_idx]=true;
+        }//now the var_idx of term is that in the _vars, while the value has updated
+    }
+    for(int lit_idx=0;lit_idx<_lits.size();lit_idx++){
+        if(!lit_appear[lit_idx]&&_lits[lit_idx].is_nia_lit){
+            lit_appear[lit_idx]=true;
+            delta_lit(_lits[lit_idx]);
+        }
+    }//now all nia lit has delta
     for(int i=0;i<_resolution_vars.size();i++){if(!_resolution_vars[i].is_nia&&_resolution_vars[i].up_bool==0){_resolution_vars[i].up_bool=-1;}}//set all origin bool var as false
     while(!_reconstruct_stack.empty()){
         clause cl=_reconstruct_stack.top();
