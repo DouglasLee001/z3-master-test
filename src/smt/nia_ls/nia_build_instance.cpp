@@ -461,6 +461,15 @@ __int128_t ls_solver::hash_lits_to_num(std::vector<int> &lits){
     for(int lit_idx:lits){hash_num=(__int128_t)hash_num*(__int128_t)(_num_lits)+(__int128_t)lit_idx+(__int128_t)_num_lits;}
     return hash_num;
 }
+bool ls_solver::is_same_lits(std::vector<int> &lits_1, std::vector<int> &lits_2){
+    if(lits_1.size()!=lits_2.size()){return false;}
+    std::sort(lits_1.begin(), lits_1.end());
+    std::sort(lits_2.begin(), lits_2.end());
+    for(int l_idx=0;l_idx<lits_1.size();l_idx++){
+        if(lits_1[l_idx]!=lits_2[l_idx]){return false;}
+    }
+    return true;
+}
 
 void ls_solver::resolution(){
     std::vector<uint64_t> pos_clauses(10*_num_clauses);
@@ -510,7 +519,6 @@ void ls_solver::resolution(){
         if((pos_clause_size*neg_clause_size-tautology_num)>(pos_clause_size+neg_clause_size)){continue;}//if deleting the var can cause 2 times clauses, then skip it
         for(uint64_t clause_idx:_resolution_vars[bool_var_idx].clause_idxs){//delete the clauses of bool_var
             _clauses[clause_idx].is_delete=true;
-            if(clauselit_map.find(clauselit[clause_idx])!=clauselit_map.end()){clauselit_map[clauselit[clause_idx]]=-1;}//delete the clause, set the map to -1
             for(int l_idx_sign:_clauses[clause_idx].literals){//delete the clause from corresponding bool var
                 lit *l=&(_lits[std::abs(l_idx_sign)]);
                 if(!l->is_nia_lit&&l->delta!=bool_var_idx){
@@ -555,18 +563,28 @@ void ls_solver::resolution(){
                         if(!is_existed_lit){new_clause.literals.push_back(l_sign_idx);}
                     }
                 }
-                __int128_t clause_lit_hash=hash_lits_to_num(new_clause.literals);
-                if(!is_tautology&&(clauselit_map.find(clause_lit_hash)==clauselit_map.end()||clauselit_map[clause_lit_hash]==-1||new_clause.literals.size()>20)){//add new clause, and modify the clause of corresponding bool var, if the literal size>20, then the clause will be added
-                    for(int l_sign_idx:new_clause.literals){
-                        lit *l_inner=&(_lits[std::abs(l_sign_idx)]);
-                        if(!l_inner->is_nia_lit){
-                            _resolution_vars[l_inner->delta].clause_idxs.push_back((int)_num_clauses);
-                        }
+                if(!is_tautology){
+                    __int128_t clause_lit_hash=hash_lits_to_num(new_clause.literals);
+                    bool should_add=false;
+                    if(clauselit_map.find(clause_lit_hash)==clauselit_map.end()){should_add=true;}//the clause never appears
+                    else{
+                        int origin_clause_idx=clauselit_map[clause_lit_hash];
+                        clause *cl_origin=&(_clauses[origin_clause_idx]);
+                        if(cl_origin->is_delete){should_add=true;}//the clause has been deleted
+                        else if(!is_same_lits(cl_origin->literals, new_clause.literals)){should_add=true;}//not the same one
                     }
-                    _clauses.push_back(new_clause);
-                    clauselit.push_back(clause_lit_hash);
-                    clauselit_map[clause_lit_hash]=(int)_num_clauses;
-                    _num_clauses++;
+                    if(should_add){//add new clause, if it never appers then add it
+                        for(int l_sign_idx:new_clause.literals){
+                            lit *l_inner=&(_lits[std::abs(l_sign_idx)]);
+                            if(!l_inner->is_nia_lit){
+                                _resolution_vars[l_inner->delta].clause_idxs.push_back((int)_num_clauses);
+                            }
+                        }
+                        _clauses.push_back(new_clause);
+                        clauselit.push_back(clause_lit_hash);
+                        clauselit_map[clause_lit_hash]=(int)_num_clauses;
+                        _num_clauses++;
+                    }
                 }
             }
         }

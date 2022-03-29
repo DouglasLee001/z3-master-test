@@ -198,6 +198,7 @@ public:
     void                        reduce_clause();
     void                        set_pre_value();
     void                        read_model();
+    bool                        is_same_lits(std::vector<int> &lits_1,std::vector<int> &lits_2);
     
     //random walk
     void                        update_clause_weight();
