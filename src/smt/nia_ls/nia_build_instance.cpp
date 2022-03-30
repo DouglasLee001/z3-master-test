@@ -249,7 +249,7 @@ void ls_solver::build_instance(std::vector<std::vector<int> >& clause_vec){
                 }
                 if(new_low_bound>_tmp_vars[var_idx].low_bound){_tmp_vars[var_idx].low_bound=new_low_bound;}
                 else if(new_upper_bound<_tmp_vars[var_idx].upper_bound){_tmp_vars[var_idx].upper_bound=new_upper_bound;}
-                _bound_lits.push_back(l->lits_index);
+                if(l->lits_index!=0){_bound_lits.push_back(l->lits_index);}
                 l->lits_index=0;
                 if(clause_vec[clause_idx][0]<0){clause_vec[clause_idx][0]=-clause_vec[clause_idx][0];}
             }
