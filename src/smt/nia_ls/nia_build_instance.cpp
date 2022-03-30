@@ -38,6 +38,8 @@ void ls_solver::build_lits(std::string &in_string){
                 l->key=-std::atoll(vec[3].c_str());
             }
             l->is_equal=(vec[2]=="=");
+            bool single_mul=false;
+            if(vec[idx-1]=="*"){idx-=2;single_mul=true;}//849 ( = ( * lam6n64 rfc9 ) 0 ) now the idx at second '('
             for(;idx<vec.size();idx++){
                 if(vec[idx]==")"){break;}
                 if(vec[idx]=="("){
@@ -49,6 +51,7 @@ void ls_solver::build_lits(std::string &in_string){
                             new_t.var_epxs.push_back(ve);
                         }
                         l->coff_terms.push_back(coff_term((int)transfer_term_to_idx(new_t),1));
+                        if(single_mul){break;}//now the idx at ')'
                     }
                     else{
                         __int128_t coff=std::atoll(vec[idx].c_str());
@@ -65,6 +68,7 @@ void ls_solver::build_lits(std::string &in_string){
                         }
                         l->coff_terms.push_back(coff_term((int)transfer_term_to_idx(new_t),coff));
                         idx++;
+                        if(single_mul){break;}// now the idx at ')'
                     }
                 }
                 else{
