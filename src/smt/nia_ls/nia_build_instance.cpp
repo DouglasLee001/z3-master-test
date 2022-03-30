@@ -83,14 +83,25 @@ void ls_solver::build_lits(std::string &in_string){
         }//( <= ( + x1 ( * -1 x2 ) x7 ( * -1 x8 ) ) 0 )
         else{
             l->lits_index=std::atoi(vec[0].c_str());
-            __int128_t bound=std::atoll(vec[4].c_str());
-            uint64_t var_idx=transfer_name_to_tmp_var(vec[3]);
-            term new_t;
-            new_t.var_epxs.push_back(var_exp((int)var_idx));
-            if(vec[2]==">="){l->key=bound;l->coff_terms.push_back(coff_term((int)transfer_term_to_idx(new_t),-1));}
-            else{l->key=-bound;l->coff_terms.push_back(coff_term((int)transfer_term_to_idx(new_t),1));}
-            l->is_equal=(vec[2]=="=");
-        }//( >= x 0 )
+            if(vec[2]=="="&&vec.size()==6&&(vec[3][0]<'0'||vec[3][0]>'9')&&(vec[4][0]<'0'||vec[4][0]>'9')){
+                l->key=0;
+                term new_t_1,new_t_2;
+                var_exp ve_1((int)transfer_name_to_tmp_var(vec[3])), ve_2((int)transfer_name_to_tmp_var(vec[4]));
+                new_t_1.var_epxs.push_back(ve_1);
+                new_t_2.var_epxs.push_back(ve_2);
+                l->coff_terms.push_back(coff_term((int)transfer_term_to_idx(new_t_1),1));
+                l->coff_terms.push_back(coff_term((int)transfer_term_to_idx(new_t_2),-1));
+            }//( = x1 x2 )
+            else{
+                __int128_t bound=std::atoll(vec[4].c_str());
+                uint64_t var_idx=transfer_name_to_tmp_var(vec[3]);
+                term new_t;
+                new_t.var_epxs.push_back(var_exp((int)var_idx));
+                if(vec[2]==">="){l->key=bound;l->coff_terms.push_back(coff_term((int)transfer_term_to_idx(new_t),-1));}
+                else{l->key=-bound;l->coff_terms.push_back(coff_term((int)transfer_term_to_idx(new_t),1));}
+                l->is_equal=(vec[2]=="=");
+            }//( >= x 0 )
+        }
         
     }//nia lit
     else{
