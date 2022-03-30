@@ -84,6 +84,7 @@ void ls_solver::build_lits(std::string &in_string){
         else{
             l->lits_index=std::atoi(vec[0].c_str());
             if(vec[2]=="="&&vec.size()==6&&(vec[3][0]<'0'||vec[3][0]>'9')&&(vec[4][0]<'0'||vec[4][0]>'9')){
+                l->is_equal=true;
                 l->key=0;
                 term new_t_1,new_t_2;
                 var_exp ve_1((int)transfer_name_to_tmp_var(vec[3])), ve_2((int)transfer_name_to_tmp_var(vec[4]));
