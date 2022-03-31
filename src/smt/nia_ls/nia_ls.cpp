@@ -54,12 +54,8 @@ void ls_solver::no_operation_random_walk(){
     var_idx_curr=var_idx_none_zero[mt()%var_idx_none_zero.size()];
     __int128_t future_solution=0;
     variable *var=&(_vars[var_idx_curr]);
-    if(var->upper_bound>=0&&var->low_bound<=0){future_solution=0;}//0 is contained in [low, upper]
-    else{
-        if(var->low_bound!=-max_int&&var->upper_bound!=max_int){future_solution=mt()%(var->upper_bound-var->low_bound)+var->low_bound;}//a random solution in [low, upper]
-        else if(var->upper_bound==max_int){future_solution=var->low_bound;}//[low, +inf) -> low
-        else if(var->low_bound==-max_int){future_solution=var->upper_bound;}//(-inf, upper] -> upper
-    }
+    if(var->low_bound>0){future_solution=var->low_bound;}
+    else if(var->upper_bound<0){future_solution=var->upper_bound;}
     critical_move(var_idx_curr, future_solution-_solution[var_idx_curr]);//move a random var with coff!=0 to 0
 }
 
