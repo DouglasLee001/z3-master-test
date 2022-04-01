@@ -240,12 +240,12 @@ void ls_solver::build_instance(std::vector<std::vector<int> >& clause_vec){
                 __int128_t new_upper_bound=max_int;
                 int var_idx=_terms[l->coff_terms[0].term_idx].var_epxs[0].var_index;
                 if(clause_vec[clause_idx][0]>0){
-                    if(l->coff_terms[0].coff>0){new_upper_bound=(-l->key)/(l->coff_terms[0].coff);}//ax+k<=0   x<=(-k/a)
-                    else{new_low_bound=(-l->key)/(l->coff_terms[0].coff);}//ax+k<=0  x>=(-k/a)
+                    if(l->coff_terms[0].coff>0){new_upper_bound=devide((-l->key),(l->coff_terms[0].coff));}//ax+k<=0   x<=(-k/a)
+                    else{new_low_bound=devide((-l->key),(l->coff_terms[0].coff));}//ax+k<=0  x>=(-k/a)
                 }
                 else{
-                    if(l->coff_terms[0].coff>0){new_low_bound=(1-l->key)/(l->coff_terms[0].coff);}//ax+k>0 ax+k>=1 x>=(1-k)/a
-                    else{new_upper_bound=(1-l->key)/(l->coff_terms[0].coff);}//ax+k>=1 x<=(1-k)/a
+                    if(l->coff_terms[0].coff>0){new_low_bound=devide((1-l->key),(l->coff_terms[0].coff));}//ax+k>0 ax+k>=1 x>=(1-k)/a
+                    else{new_upper_bound=devide((1-l->key),(l->coff_terms[0].coff));}//ax+k>=1 x<=(1-k)/a
                 }
                 if(new_low_bound>_tmp_vars[var_idx].low_bound){_tmp_vars[var_idx].low_bound=new_low_bound;}
                 else if(new_upper_bound<_tmp_vars[var_idx].upper_bound){_tmp_vars[var_idx].upper_bound=new_upper_bound;}
