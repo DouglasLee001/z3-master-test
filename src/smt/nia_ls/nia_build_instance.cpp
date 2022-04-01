@@ -83,7 +83,7 @@ void ls_solver::build_lits(std::string &in_string){
         }//( <= ( + x1 ( * -1 x2 ) x7 ( * -1 x8 ) ) 0 )
         else{
             l->lits_index=std::atoi(vec[0].c_str());
-            if(vec[2]=="="&&vec.size()==6&&(vec[3][0]<'0'||vec[3][0]>'9')&&(vec[4][0]<'0'||vec[4][0]>'9')){
+            if(vec[2]=="="&&vec.size()==6&&(vec[3][0]<'0'||vec[3][0]>'9')&&(vec[4][0]<'0'||vec[4][0]>'9')&&(vec[3][0]!='-')&&(vec[4][0]!='-')){
                 l->is_equal=true;
                 l->key=0;
                 term new_t_1,new_t_2;
