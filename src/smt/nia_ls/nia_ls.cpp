@@ -51,7 +51,8 @@ void ls_solver::no_operation_random_walk(){
             if(coff!=0){var_idx_none_zero.push_back(var_idx_curr);}// if coff==0, changing the var cannot make any progress
         }//the last vlt of the var or the last vlt of the lit
     }
-    var_idx_curr=var_idx_none_zero[mt()%var_idx_none_zero.size()];
+    if(var_idx_none_zero.size()==0){var_idx_curr=l->var_lit_terms[mt()%l_var_lit_term_num].var_idx;}
+    else{var_idx_curr=var_idx_none_zero[mt()%var_idx_none_zero.size()];}
     __int128_t future_solution=0;
     variable *var=&(_vars[var_idx_curr]);
     if(var->low_bound>0){future_solution=var->low_bound;}
