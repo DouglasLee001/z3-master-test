@@ -654,7 +654,7 @@ bool ls_solver::local_search(){
     _outer_layer_step=1;
     for(_step=1;_step<_max_step;_step++){
         if(0==unsat_clauses->size()){
-            check_solution();
+            // check_solution();
             up_bool_vars();
             return true;}
         if(_step%1000==0&&(TimeElapsed()>_cutoff)){break;}

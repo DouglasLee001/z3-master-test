@@ -293,7 +293,7 @@ static void pp_funs(std::ostream & out, ast_printer_context & ctx, model_core co
 void model_smt2_pp(std::ostream & out, ast_printer_context & ctx, model_core const & m, unsigned indent) {
     pp_uninterp_sorts(out, ctx, m, indent);
     pp_consts(out, ctx, m, indent);
-    pp_funs(out, ctx, m, indent);
+    // pp_funs(out, ctx, m, indent);
 }
 
 void model_smt2_pp(std::ostream & out, ast_manager & m, model_core const & md, unsigned indent) {
