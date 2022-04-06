@@ -21,6 +21,9 @@ Revision History:
 #include "ast/for_each_expr.h"
 #include "ast/arith_decl_plugin.h"
 #include "tactic/goal_util.h"
+#include "ast/ast_pp.h"
+#include <sstream>
+#include <algorithm>
 
 namespace {
 
@@ -563,6 +566,18 @@ static bool is_lia(goal const & g) {
     return !test(g, p);
 }
 
+static bool is_STC(goal const & g) {
+    ptr_vector<expr> fmls;
+    g.get_formulas(fmls);
+    if(fmls.size()==1){
+        std::stringstream ss;
+        ss<<mk_pp(fmls[0],g.m())<<"\n";
+        std::string goal_f=ss.str();
+        if(goal_f[1]=='='){return std::count(goal_f.begin(),goal_f.end(),' ')==14;}
+    }
+    return false;
+}
+
 static bool is_lira(goal const & g) {
     is_non_nira_functor p(g.m(), true, true, true, true);
     return !test(g, p);
@@ -680,6 +695,13 @@ public:
     }
 };
 
+class is_STC_probe : public probe {
+    public :
+    result operator()(goal const & g) override {
+        return is_STC(g);
+    }
+};
+
 class is_lra_probe : public probe {
 public:
     result operator()(goal const & g) override {
@@ -742,4 +764,8 @@ probe * mk_is_lira_probe() {
 
 probe* mk_is_qfufnra_probe() {
     return alloc(is_qfufnra_probe);
+}
+
+probe* mk_is_STC_probe(){
+    return alloc(is_STC_probe);
 }

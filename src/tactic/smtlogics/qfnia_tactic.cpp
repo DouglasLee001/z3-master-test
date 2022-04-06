@@ -31,6 +31,7 @@ Notes:
 #include "tactic/core/ctx_simplify_tactic.h"
 #include "tactic/core/cofactor_term_ite_tactic.h"
 #include "nlsat/tactic/qfnra_nlsat_tactic.h"
+#include "tactic/arith/probe_arith.h"
 
 static tactic * mk_qfnia_bv_solver(ast_manager & m, params_ref const & p_ref) {
     params_ref p = p_ref;
@@ -93,6 +94,18 @@ static tactic * mk_qfnia_sat_solver(ast_manager & m, params_ref const & p) {
                     skip_if_failed(mk_qfnia_bv_solver(m, p)),
                     mk_fail_if_undecided_tactic());
 }
+
+static tactic * mk_qfnia_sat_solver_large(ast_manager & m, params_ref const & p) {
+    params_ref nia2sat_p = p;
+    nia2sat_p.set_uint("nla2bv_bv_size", 8);
+    nia2sat_p.set_uint("nla2bv_max_bv_size", 128);  
+    params_ref simp_p = p;
+    simp_p.set_bool("hoist_mul", true); // hoist multipliers to create smaller circuits.
+    return and_then(using_params(mk_simplify_tactic(m), simp_p),
+                    mk_nla2bv_tactic(m, nia2sat_p),
+                    skip_if_failed(mk_qfnia_bv_solver(m, p)),
+                    mk_fail_if_undecided_tactic());
+}
 //转到NLSAT求解
 static tactic * mk_qfnia_nlsat_solver(ast_manager & m, params_ref const & p) {
     params_ref nia2sat_p = p;
@@ -119,9 +132,13 @@ tactic * mk_qfnia_tactic(ast_manager & m, params_ref const & p) {
         mk_report_verbose_tactic("(qfnia-tactic)", 10),
         mk_qfnia_preamble(m, p),
         // or_else(mk_qfnia_sat_solver(m, p),
+        cond(mk_is_STC_probe(),
+            mk_qfnia_sat_solver(m, p),
+            mk_qfnia_smt_solver(m, p))
+        )
         //          try_for(mk_qfnia_smt_solver(m, p), 2000),
         //          mk_qfnia_nlsat_solver(m, p),        
-                 mk_qfnia_smt_solver(m, p))
+                //  mk_qfnia_smt_solver(m, p))
                     // )
         ;
 }

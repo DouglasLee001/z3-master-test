@@ -31,6 +31,7 @@ Notes:
 #include "tactic/arith/bound_manager.h"
 #include "util/obj_pair_hashtable.h"
 #include "ast/ast_smt2_pp.h"
+#define NLS_DEBUG
 
 //
 // 
@@ -76,7 +77,7 @@ class nla2bv_tactic : public tactic {
             m_defs(m),
             m_trail(m),
             m_fmc(nullptr) {
-            m_default_bv_size = m_num_bits = p.get_uint("nla2bv_bv_size", 4);
+            m_default_bv_size = m_num_bits = p.get_uint("nla2bv_bv_size", 8);//此处可以用来修改bv的宽度
         }
 
         ~imp() {}
@@ -117,6 +118,10 @@ class nla2bv_tactic : public tactic {
             g.inc_depth();
             if (!is_sat_preserving())
                 g.updt_prec(goal::UNDER);
+            #ifdef LS_DEBUG
+                std::cout<<"after nla2bv\n";
+                g.display(std::cout);//在这里可以将BV公式导出，用其他求解器求解!!!
+            #endif
         }
         
         bool const& is_sat_preserving() const { return m_is_sat_preserving; }

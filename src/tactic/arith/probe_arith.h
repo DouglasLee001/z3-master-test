@@ -52,6 +52,7 @@ probe * mk_is_nia_probe();
 probe * mk_is_nra_probe();
 probe * mk_is_nira_probe();
 probe * mk_is_lia_probe();
+probe * mk_is_STC_probe();
 probe * mk_is_lra_probe();
 probe * mk_is_lira_probe();
 probe * mk_is_qfufnra_probe();
