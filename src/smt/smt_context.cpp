@@ -3687,6 +3687,7 @@ namespace smt {
             // model_pp(std::cout, *m_proto_model);
             // std::cout << "END_OF_MODEL3 before search\n";
             m_nia_ls_solver->build_instance(clauses_vec);
+            if(m_nia_ls_solver->has_high_coff){return l_undef;}
             // m_nia_ls_solver->print_formula();
             m_nia_ls_solver->local_search();
             if(m_nia_ls_solver->best_found_cost==0){

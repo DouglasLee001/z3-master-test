@@ -745,10 +745,8 @@ void ls_solver::reduce_clause(){
         for(var_exp &ve:t->var_epxs){
             _vars[ve.var_index].term_idxs.push_back(term_idx);
             if(curr_var_idx==ve.var_index){
-                std::cout<<"unknown\nthe term (";
-                print_term(*t);
-                std::cout<<") has coff > 1\n";
-                std::exit(0);
+                has_high_coff=true;
+                return;
             }
             else{curr_var_idx=ve.var_index;}
         }

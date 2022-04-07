@@ -121,6 +121,7 @@ public:
     bool                        is_idl=true;//if it is the IDL mode
     uint64_t                    last_op_var;
     __int128_t                  last_op_value;//the last value and last var, x +1, at least at next step, x -1 is forbidden
+    bool                        has_high_coff=false;//if there exists x*x
     //solution
     std::vector<__int128_t>       _solution;
     std::vector<__int128_t>       _best_solutin;
