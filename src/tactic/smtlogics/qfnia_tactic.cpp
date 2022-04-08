@@ -131,19 +131,13 @@ tactic * mk_qfnia_tactic(ast_manager & m, params_ref const & p) {
     return and_then(
         mk_report_verbose_tactic("(qfnia-tactic)", 10),
         mk_qfnia_preamble(m, p),
-        // or_else(mk_qfnia_sat_solver(m, p),
         or_else(
-            and_then(
-                skip_if_failed(mk_qfnia_smt_solver(m,p)),
-                mk_fail_if_undecided_tactic()),
-            mk_qfnia_sat_solver(m, p),
-            mk_qfnia_sat_solver_large(m, p,12)
+            mk_qfnia_smt_solver(m,p)
+            ,mk_qfnia_sat_solver(m, p)
+            ,mk_qfnia_sat_solver_large(m, p,12)
+            ,mk_qfnia_nlsat_solver(m, p)
         )
     )
-        //          try_for(mk_qfnia_smt_solver(m, p), 2000),
-        //          mk_qfnia_nlsat_solver(m, p),        
-                //  mk_qfnia_smt_solver(m, p))
-                    // )
         ;
 }
 
