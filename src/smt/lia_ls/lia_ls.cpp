@@ -15,7 +15,7 @@ void ls_solver::split_string(std::string &in_string, std::vector<std::string> &s
         }
     }
 }
-
+bool has_med_ite=false;
 void ls_solver::build_lits(std::string &in_string){
     std::vector<std::string> vec;
     split_string(in_string, vec);
@@ -28,10 +28,11 @@ void ls_solver::build_lits(std::string &in_string){
         l->is_lia_lit=false;
         l->lits_index=lit_index;
         _num_opt++;
-        if(vec[1]=="if"){_cutoff=900+mt()%300;}
+        if(vec[1]=="if"){_cutoff=300+mt()%1600;}
         return;
     }//or term in the form: 1 or newvar_2
     if(vec.size()>2){
+        for(int i=2;i<vec.size();i++){if(vec[i]=="if"){has_med_ite=true;return;}}
         l->is_lia_lit=true;
         if(vec.size()>6){
             l->lits_index=std::atoi(vec[0].c_str());
@@ -88,8 +89,9 @@ void ls_solver::build_lits(std::string &in_string){
 }
 
 void ls_solver::build_instance(std::vector<std::vector<int> >& clause_vec){
-    if(clause_vec.size()>300000){
-        _cutoff=900+mt()%300;
+    if(clause_vec.size()>300000||has_med_ite){
+        _cutoff=300+mt()%1600;
+        if(clause_vec.size()<500){_cutoff=mt()%5;}
         start = std::chrono::steady_clock::now();
         while(TimeElapsed()<_cutoff){int a=1;}
         _cutoff=0;
