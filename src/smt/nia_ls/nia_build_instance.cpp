@@ -94,8 +94,16 @@ void ls_solver::build_lits(std::string &in_string){
                 l->coff_terms.push_back(coff_term((int)transfer_term_to_idx(new_t_2),-1));
             }//( = x1 x2 )
             else{
-                __int128_t bound=std::atoll(vec[4].c_str());
-                uint64_t var_idx=transfer_name_to_tmp_var(vec[3]);
+                __int128_t bound;
+                uint64_t var_idx;
+                if((vec[3][0]<'0'||vec[3][0]>'9')&&(vec[3][0]!='-')){
+                    bound=std::atoll(vec[4].c_str());
+                    var_idx=transfer_name_to_tmp_var(vec[3]);
+                }//( >= x 0 )
+                else{
+                    bound=std::atoll(vec[3].c_str());
+                    var_idx=transfer_name_to_tmp_var(vec[4]);
+                }//( = 0 x )
                 term new_t;
                 new_t.var_epxs.push_back(var_exp((int)var_idx));
                 if(vec[2]==">="){l->key=bound;l->coff_terms.push_back(coff_term((int)transfer_term_to_idx(new_t),-1));}
